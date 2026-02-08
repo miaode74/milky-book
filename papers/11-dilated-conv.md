@@ -6,35 +6,35 @@
 ## 2. Abstract: 论文试图解决什么问题？有什么贡献？
 
 ### 核心问题
-[cite_start]在计算机视觉领域，语义分割（Semantic Segmentation）等密集预测任务通常直接沿用为图像分类设计的卷积神经网络（如 VGG、AlexNet）。然而，分类网络为了获取全局上下文，大量使用了**池化（Pooling）**和**下采样（Subsampling）**层，导致空间分辨率大幅下降 [cite: 7, 25]。
-[cite_start]对于需要像素级精度的密集预测任务，这种分辨率的丢失是致命的。为了弥补这一缺陷，之前的研究通常采用复杂的上采样（Up-convolution）或多尺度输入（Image Pyramid）策略 [cite: 28, 30]，但这增加了计算复杂度或引入了不必要的中间下采样步骤。
+在计算机视觉领域，语义分割（Semantic Segmentation）等密集预测任务通常直接沿用为图像分类设计的卷积神经网络（如 VGG、AlexNet）。然而，分类网络为了获取全局上下文，大量使用了**池化（Pooling）**和**下采样（Subsampling）**层，导致空间分辨率大幅下降 。
+对于需要像素级精度的密集预测任务，这种分辨率的丢失是致命的。为了弥补这一缺陷，之前的研究通常采用复杂的上采样（Up-convolution）或多尺度输入（Image Pyramid）策略 ，但这增加了计算复杂度或引入了不必要的中间下采样步骤。
 
 ### 主要贡献
-1.  [cite_start]**系统化阐述空洞卷积**：重新审视了空洞卷积（Dilated Convolution）在深度学习中的应用，指出它支持感受野（Receptive Field）的指数级增长，同时保持分辨率和参数量不变 [cite: 11, 38]。
-2.  [cite_start]**提出上下文聚合模块（Context Module）**：设计了一个即插即用的多层网络模块，通过堆叠不同扩张率（Dilation Rate）的卷积层，系统地聚合多尺度上下文信息 [cite: 10, 34]。
-3.  [cite_start]**简化前端网络**：证明了移除分类网络中最后两个池化层，并用空洞卷积替代，可以构建一个更简单且精度更高的前端预测模块（Front-end） [cite: 13, 138]。
-4.  [cite_start]**SOTA 性能**：在 Pascal VOC 2012 数据集上，该方法在不使用后处理（如 CRF）的情况下，性能超越了当时的 DeepLab 等主流模型 [cite: 12, 183]。
+1.  **系统化阐述空洞卷积**：重新审视了空洞卷积（Dilated Convolution）在深度学习中的应用，指出它支持感受野（Receptive Field）的指数级增长，同时保持分辨率和参数量不变 。
+2.  **提出上下文聚合模块（Context Module）**：设计了一个即插即用的多层网络模块，通过堆叠不同扩张率（Dilation Rate）的卷积层，系统地聚合多尺度上下文信息 。
+3.  **简化前端网络**：证明了移除分类网络中最后两个池化层，并用空洞卷积替代，可以构建一个更简单且精度更高的前端预测模块（Front-end） 。
+4.  **SOTA 性能**：在 Pascal VOC 2012 数据集上，该方法在不使用后处理（如 CRF）的情况下，性能超越了当时的 DeepLab 等主流模型 。
 
 ## 3. Introduction: 论文的动机是什么？请仔细梳理整个故事逻辑
 
 论文的动机源于对“图像分类”与“密集预测”结构差异的深刻洞察。
 
 ### 背景：分类 vs. 分割的冲突
-[cite_start]现代图像分类网络（如 VGG-16）通过连续的池化层将图像逐步缩小，直到获得一个全局的特征向量用于分类 [cite: 25]。这种设计虽然能有效捕获图像的全局语义，但丢弃了详细的空间信息。
+现代图像分类网络（如 VGG-16）通过连续的池化层将图像逐步缩小，直到获得一个全局的特征向量用于分类 。这种设计虽然能有效捕获图像的全局语义，但丢弃了详细的空间信息。
 然而，语义分割要求网络同时具备：
 1.  **像素级精度**（Pixel-level accuracy）：需要高分辨率的特征图。
-2.  [cite_start]**多尺度上下文**（Multi-scale contextual reasoning）：需要大的感受野来消除歧义 [cite: 18]。
+2.  **多尺度上下文**（Multi-scale contextual reasoning）：需要大的感受野来消除歧义 。
 
 ### 现有方案的局限性
 为了解决上述冲突，当时的主流方法主要有两类：
-* [cite_start]**编解码结构（Encoder-Decoder）**：先下采样再通过反卷积（Deconvolution）恢复分辨率（如 U-Net, FCN）。作者质疑：中间的严重下采样是否真的必要？ [cite: 28, 29]
-* [cite_start]**图像金字塔（Image Pyramids）**：将图像缩放成不同尺寸分别输入网络，再融合结果。这增加了计算负担，且未从根本上解决网络本身的感受野限制 [cite: 30, 31]。
+* **编解码结构（Encoder-Decoder）**：先下采样再通过反卷积（Deconvolution）恢复分辨率（如 U-Net, FCN）。作者质疑：中间的严重下采样是否真的必要？ 
+* **图像金字塔（Image Pyramids）**：将图像缩放成不同尺寸分别输入网络，再融合结果。这增加了计算负担，且未从根本上解决网络本身的感受野限制 。
 
 ### 论文的破局思路
 作者提出了一种新的范式：**不仅不要下采样，还要在全分辨率下“看”得更远**。
-[cite_start]他们设计了一个“矩形棱柱”（rectangular prism）形状的网络模块，没有池化层，只有卷积层 [cite: 37]。通过引入**空洞卷积**，每一层的卷积核虽然参数数量不变（例如 $3 \times 3$），但其覆盖的输入范围（感受野）可以随着层数指数级增加。这使得网络能够在保持全分辨率输出的同时，拥有覆盖整张图像的全局感受野。
+他们设计了一个“矩形棱柱”（rectangular prism）形状的网络模块，没有池化层，只有卷积层 。通过引入**空洞卷积**，每一层的卷积核虽然参数数量不变（例如 $3 \times 3$），但其覆盖的输入范围（感受野）可以随着层数指数级增加。这使得网络能够在保持全分辨率输出的同时，拥有覆盖整张图像的全局感受野。
 
-> [cite_start]"The architecture is based on the fact that dilated convolutions support exponential expansion of the receptive field without loss of resolution or coverage." [cite: 11]
+> "The architecture is based on the fact that dilated convolutions support exponential expansion of the receptive field without loss of resolution or coverage." 
 
 这一思路直接挑战了“必须通过降低分辨率来获得大感受野”的传统观念。
 
@@ -43,30 +43,30 @@
 ### 4.1 空洞卷积（Dilated Convolution）定义
 论文首先形式化定义了空洞卷积。对于离散函数 $F: \mathbb{Z}^2 \rightarrow \mathbb{R}$ 和滤波器 $k: \Omega_r \rightarrow \mathbb{R}$，扩张率为 $l$ 的空洞卷积 $*_l$ 定义为：
 $$(F *_l k)(p) = \sum_{s+lt=p} F(s)k(t)$$
-[cite_start][cite: 49]
+
 这里，$l=1$ 时即为标准卷积。直观上，这相当于在卷积核的权重之间插入 $l-1$ 个零，使得卷积核在不增加参数的情况下“膨胀”了。
 
 ### 4.2 指数增长的感受野
 作者展示了通过堆叠空洞卷积，感受野可以实现指数级增长。
 设 $F_0, F_1, ..., F_{n-1}$ 为特征图序列，卷积核大小为 $3 \times 3$，扩张率随层数 $i$ 指数增加（$l_i = 2^i$）：
 $$F_{i+1} = F_i *_{2^i} k_i \quad \text{for } i=0, 1, ..., n-2$$
-[cite_start][cite: 66]
-[cite_start]在这种设置下，第 $i+1$ 层中每个元素的感受野大小为 $(2^{i+2}-1) \times (2^{i+2}-1)$ [cite: 85]。这意味着感受野的大小随层数呈指数增长，而参数数量仅随层数线性增长。
+
+在这种设置下，第 $i+1$ 层中每个元素的感受野大小为 $(2^{i+2}-1) \times (2^{i+2}-1)$ 。这意味着感受野的大小随层数呈指数增长，而参数数量仅随层数线性增长。
 
 ### 4.3 上下文聚合模块（Context Module）
 这是论文的核心组件，设计为一个即插即用的模块。
 * **结构**：包含 7 层（Basic版）。
-* [cite_start]**扩张率设置**：分别为 $1, 1, 2, 4, 8, 16, 1$ [cite: 95]。
+* **扩张率设置**：分别为 $1, 1, 2, 4, 8, 16, 1$ 。
 * **卷积核**：前 6 层为 $3 \times 3$，最后一层为 $1 \times 1$。
-* [cite_start]**截断（Truncation）**：每一层卷积后接 pointwise max($\cdot, 0$)，即 ReLU [cite: 96]。
+* **截断（Truncation）**：每一层卷积后接 pointwise max($\cdot, 0$)，即 ReLU 。
 * **作用**：该模块输入 $C$ 个特征图，输出 $C$ 个特征图，可以直接插入到任何现有的密集预测网络后端，用于整理和聚合上下文信息。
 
 ### 4.4 初始化策略（Identity Initialization）
 作者发现标准的随机初始化无法有效训练该模块，因此提出了一种特殊的初始化方法：**Identity Initialization**。
 即初始化滤波器使得每一层仅仅是将输入原样传递给下一层（Pass-through）：
 $$k^b(t, a) = 1_{[t=0]} 1_{[a=b]}$$
-[cite_start][cite: 104]
-[cite_start]这种初始化让网络初始状态下等价于“恒等映射”，梯度下降会在此基础上逐步挖掘上下文信息，避免了初始状态下梯度的混乱 [cite: 108, 110]。
+
+这种初始化让网络初始状态下等价于“恒等映射”，梯度下降会在此基础上逐步挖掘上下文信息，避免了初始状态下梯度的混乱 。
 
 ```mermaid
 graph LR
@@ -553,3 +553,213 @@ if __name__ == "__main__":
 
 
 ```
+
+<!-- AUTO_PDF_IMAGES_START -->
+
+## 论文原图（PDF）
+> 下图自动抽取自原论文 PDF，用于补充概念、结构和实验细节。
+> 来源：`11.pdf`
+
+![Dilated Convolution 图 1](/paper-figures/11/img-063.png)
+*图 1：建议结合本节 `空洞卷积多尺度建模` 一起阅读。*
+
+![Dilated Convolution 图 2](/paper-figures/11/img-064.png)
+*图 2：建议结合本节 `空洞卷积多尺度建模` 一起阅读。*
+
+![Dilated Convolution 图 3](/paper-figures/11/img-065.png)
+*图 3：建议结合本节 `空洞卷积多尺度建模` 一起阅读。*
+
+<!-- AUTO_PDF_IMAGES_END -->
+
+<!-- AUTO_INTERVIEW_QA_START -->
+
+## 面试题与答案
+> 主题：**Dilated Convolution**（围绕 `空洞卷积多尺度建模`）
+
+### 一、选择题（10题）
+
+1. 在 Dilated Convolution 中，最关键的建模目标是什么？
+   - A. 空洞卷积多尺度建模
+   - B. dilation
+   - C. 感受野
+   - D. 语义分割
+   - **答案：A**
+
+2. 下列哪一项最直接对应 Dilated Convolution 的核心机制？
+   - A. dilation
+   - B. 感受野
+   - C. 语义分割
+   - D. 上下文
+   - **答案：B**
+
+3. 在复现 Dilated Convolution 时，优先要保证哪项一致性？
+   - A. 只看最终分数
+   - B. 只看训练集表现
+   - C. 实现与论文设置对齐
+   - D. 忽略随机种子
+   - **答案：C**
+
+4. 对于 Dilated Convolution，哪个指标最能反映方法有效性？
+   - A. 主指标与分组指标
+   - B. 只看单次结果
+   - C. 只看速度
+   - D. 只看参数量
+   - **答案：A**
+
+5. 当 Dilated Convolution 模型出现效果退化时，首要检查项是什么？
+   - A. 数据与标签管线
+   - B. 先增大模型十倍
+   - C. 随机改损失函数
+   - D. 删除验证集
+   - **答案：A**
+
+6. Dilated Convolution 与传统 baseline 的主要差异通常体现在？
+   - A. 归纳偏置与结构设计
+   - B. 仅参数更多
+   - C. 仅训练更久
+   - D. 仅学习率更小
+   - **答案：A**
+
+7. 若要提升 Dilated Convolution 的泛化能力，最稳妥的做法是？
+   - A. 正则化+消融验证
+   - B. 只堆数据不复核
+   - C. 关闭评估脚本
+   - D. 取消对照组
+   - **答案：A**
+
+8. 关于 Dilated Convolution 的实验设计，下列说法更合理的是？
+   - A. 固定变量做可复现实验
+   - B. 同时改十个超参
+   - C. 只展示最好一次
+   - D. 省略失败实验
+   - **答案：A**
+
+9. 在工程部署中，Dilated Convolution 的常见风险是？
+   - A. 数值稳定与漂移
+   - B. 只关心GPU利用率
+   - C. 日志越少越好
+   - D. 不做回归测试
+   - **答案：A**
+
+10. 回到论文主张，Dilated Convolution 最不应该被误解为？
+   - A. 可替代所有任务
+   - B. 有明确适用边界
+   - C. 不需要数据质量
+   - D. 不需要误差分析
+   - **答案：B**
+
+
+### 二、代码题（10题，含参考答案）
+
+1. 实现一个最小可运行的数据预处理函数，输出可用于 Dilated Convolution 训练的批次。
+   - 参考答案：
+     ```python
+     import numpy as np
+     
+     def make_batch(x, y, batch_size=32):
+         idx = np.random.choice(len(x), batch_size, replace=False)
+         return x[idx], y[idx]
+     ```
+
+2. 实现 Dilated Convolution 的核心前向步骤（简化版），并返回中间张量。
+   - 参考答案：
+     ```python
+     import numpy as np
+     
+     def forward_core(x, w, b):
+         z = x @ w + b
+         h = np.tanh(z)
+         return h, {"z": z, "h": h}
+     ```
+
+3. 写一个训练 step：前向、loss、反向、更新。
+   - 参考答案：
+     ```python
+     def train_step(model, optimizer, criterion, xb, yb):
+         optimizer.zero_grad()
+         pred = model(xb)
+         loss = criterion(pred, yb)
+         loss.backward()
+         optimizer.step()
+         return float(loss.item())
+     ```
+
+4. 实现一个评估函数，返回主指标与一个辅助指标。
+   - 参考答案：
+     ```python
+     import numpy as np
+     
+     def evaluate(y_true, y_pred):
+         acc = (y_true == y_pred).mean()
+         err = 1.0 - acc
+         return {"acc": float(acc), "err": float(err)}
+     ```
+
+5. 实现梯度裁剪与学习率调度的训练循环（简化版）。
+   - 参考答案：
+     ```python
+     import torch
+     
+     def train_loop(model, loader, optimizer, criterion, scheduler=None, clip=1.0):
+         model.train()
+         for xb, yb in loader:
+             optimizer.zero_grad()
+             loss = criterion(model(xb), yb)
+             loss.backward()
+             torch.nn.utils.clip_grad_norm_(model.parameters(), clip)
+             optimizer.step()
+             if scheduler is not None:
+                 scheduler.step()
+     ```
+
+6. 实现 ablation 开关：可切换是否启用 `dilation`。
+   - 参考答案：
+     ```python
+     def forward_with_ablation(x, module, use_feature=True):
+         if use_feature:
+             return module(x)
+         return x
+     ```
+
+7. 实现一个鲁棒的数值稳定 softmax / logsumexp 工具函数。
+   - 参考答案：
+     ```python
+     import numpy as np
+     
+     def stable_softmax(x, axis=-1):
+         x = x - np.max(x, axis=axis, keepdims=True)
+         ex = np.exp(x)
+         return ex / np.sum(ex, axis=axis, keepdims=True)
+     ```
+
+8. 写一个小型单元测试，验证 `感受野` 相关张量形状正确。
+   - 参考答案：
+     ```python
+     def test_shape(out, expected_last_dim):
+         assert out.ndim >= 2
+         assert out.shape[-1] == expected_last_dim
+     ```
+
+9. 实现模型推理包装器，支持 batch 输入并返回结构化结果。
+   - 参考答案：
+     ```python
+     def infer(model, xb):
+         logits = model(xb)
+         pred = logits.argmax(dim=-1)
+         return {"pred": pred, "logits": logits}
+     ```
+
+10. 实现一个实验记录器，保存超参、指标和随机种子。
+   - 参考答案：
+     ```python
+     import json
+     from pathlib import Path
+     
+     def save_run(path, cfg, metrics, seed):
+         payload = {"cfg": cfg, "metrics": metrics, "seed": seed}
+         Path(path).write_text(json.dumps(payload, ensure_ascii=False, indent=2))
+     ```
+
+
+<!-- AUTO_INTERVIEW_QA_END -->
+

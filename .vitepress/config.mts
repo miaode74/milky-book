@@ -29,7 +29,7 @@ export default withMermaid(
           text: '📖 导航中枢',
           items: [
             { text: '前言与系列介绍', link: '/intro' },
-            { text: '致谢 (My Heroes)', link: '/heroes' },
+            { text: '致谢 (My Heroes)', link: '/heros' },
           ]
         },
         {

@@ -5,32 +5,32 @@
 
 ## 2. Abstract: 论文试图解决什么问题？有什么贡献？
 **核心问题**：
-[cite_start]深度学习中的序列模型（RNN/LSTM）极大推动了机器翻译和语音识别的发展，这些任务的输入和输出通常是具有自然顺序的序列 [cite: 8, 9][cite_start]。然而，许多现实问题（如排序、对象检测、求解几何问题）的输入或输出本质上是**集合（Sets）**，即元素的顺序不应影响结果 [cite: 10, 11]。
+深度学习中的序列模型（RNN/LSTM）极大推动了机器翻译和语音识别的发展，这些任务的输入和输出通常是具有自然顺序的序列 。然而，许多现实问题（如排序、对象检测、求解几何问题）的输入或输出本质上是**集合（Sets）**，即元素的顺序不应影响结果 。
 传统的 Seq2Seq 强行将集合视为序列处理，但这带来两个问题：
-1.  [cite_start]**输入端**：模型对输入顺序敏感，不同的输入排列可能导致不同的输出，这违反了集合的无序性 [cite: 13]。
-2.  [cite_start]**输出端**：对于输出为集合的任务，存在 $n!$ 种合法的输出排列。如果训练数据随机排列，会增加模型学习联合概率分布的难度 [cite: 12, 15]。
+1.  **输入端**：模型对输入顺序敏感，不同的输入排列可能导致不同的输出，这违反了集合的无序性 。
+2.  **输出端**：对于输出为集合的任务，存在 $n!$ 种合法的输出排列。如果训练数据随机排列，会增加模型学习联合概率分布的难度 。
 
 **主要贡献**：
-1.  [cite_start]**实证发现“顺序很重要（Order Matters）”**：即使对于理论上能逼近任何函数的 LSTM，输入数据的顺序也会显著影响优化的收敛性和最终性能 [cite: 13, 29]。
-2.  [cite_start]**提出 Read-Process-Write 架构**：扩展了 Seq2Seq 框架，通过引入注意力机制和无输入 LSTM 处理块，以一种原则性的方式处理输入集合，保证了置换不变性 [cite: 14, 123]。
-3.  [cite_start]**提出输出顺序优化策略**：在训练过程中动态搜索“最佳输出顺序”，而不是固定某种随机顺序，从而简化了概率模型的学习过程 [cite: 15, 242]。
+1.  **实证发现“顺序很重要（Order Matters）”**：即使对于理论上能逼近任何函数的 LSTM，输入数据的顺序也会显著影响优化的收敛性和最终性能 。
+2.  **提出 Read-Process-Write 架构**：扩展了 Seq2Seq 框架，通过引入注意力机制和无输入 LSTM 处理块，以一种原则性的方式处理输入集合，保证了置换不变性 。
+3.  **提出输出顺序优化策略**：在训练过程中动态搜索“最佳输出顺序”，而不是固定某种随机顺序，从而简化了概率模型的学习过程 。
 
 ## 3. Introduction: 论文的动机是什么？请仔细梳理整个故事逻辑
 **从序列到集合的跨越**
-[cite_start]Seq2Seq 模型（Encoder-Decoder）利用链式法则（Chain Rule）将联合概率 $P(Y|X)$ 分解为条件概率的乘积 [cite: 9]。
+Seq2Seq 模型（Encoder-Decoder）利用链式法则（Chain Rule）将联合概率 $P(Y|X)$ 分解为条件概率的乘积 。
 $$P(Y|X) = \prod_{t=1}^{T} P(y_t | y_{1}, \dots, y_{t-1}, X)$$
-[cite_start]当 $X$ 是文本序列时，用 LSTM 按顺序读取是合理的 [cite: 54]。但当 $X$ 是一个集合（例如一组待排序的数字 $\{5, 2, 8\}$）时，我们应该以什么顺序读取它？是 $(5, 2, 8)$ 还是 $(2, 5, 8)$？
-[cite_start]理论上，LSTM 作为通用近似器应该能学会“忽略顺序”，但论文指出，由于非凸优化和梯度流的问题，**输入顺序的选择实际上对训练结果至关重要** [cite: 29, 80]。
+当 $X$ 是文本序列时，用 LSTM 按顺序读取是合理的 。但当 $X$ 是一个集合（例如一组待排序的数字 $\{5, 2, 8\}$）时，我们应该以什么顺序读取它？是 $(5, 2, 8)$ 还是 $(2, 5, 8)$？
+理论上，LSTM 作为通用近似器应该能学会“忽略顺序”，但论文指出，由于非凸优化和梯度流的问题，**输入顺序的选择实际上对训练结果至关重要** 。
 
 **先验工作的启示**
 论文引用了之前的几个关键发现来支撑“顺序很重要”的观点：
-* [cite_start]**机器翻译**：将源句子倒序输入（Reverse source），BLEU 分数提升了 5.0 [cite: 84]。
-* [cite_start]**计算几何**：在计算凸包时，如果预先将点按角度排序，模型的准确率提升了 10% [cite: 87]。
+* **机器翻译**：将源句子倒序输入（Reverse source），BLEU 分数提升了 5.0 。
+* **计算几何**：在计算凸包时，如果预先将点按角度排序，模型的准确率提升了 10% 。
 这表明，找到一个“好”的顺序能降低学习难度。但对于集合问题，我们不仅想要一个好的顺序，我们更想要模型对**任意顺序**都具有鲁棒性（即置换不变性）。
 
 **解决方案的逻辑**
-1.  [cite_start]**输入端**：与其依赖数据预处理排序，不如设计一个网络结构，无论输入顺序如何，其生成的 Context Vector 都是一样的。这引出了 **Read-Process-Write** 模型，利用注意力机制（Attention）天然的求和聚合特性来实现这一目标 [cite: 93, 98]。
-2.  [cite_start]**输出端**：如果目标是输出一个集合（例如在一张图中检测出的所有物体），我们不能强迫模型只学习某一种随机顺序。论文提出在训练时让模型自己“挑选”当前参数下概率最高的输出顺序进行更新 [cite: 242]。
+1.  **输入端**：与其依赖数据预处理排序，不如设计一个网络结构，无论输入顺序如何，其生成的 Context Vector 都是一样的。这引出了 **Read-Process-Write** 模型，利用注意力机制（Attention）天然的求和聚合特性来实现这一目标 。
+2.  **输出端**：如果目标是输出一个集合（例如在一张图中检测出的所有物体），我们不能强迫模型只学习某一种随机顺序。论文提出在训练时让模型自己“挑选”当前参数下概率最高的输出顺序进行更新 。
 
 ## 4. Method: 解决方案是什么？请梳理步骤、公式、策略
 
@@ -38,12 +38,12 @@ $$P(Y|X) = \prod_{t=1}^{T} P(y_t | y_{1}, \dots, y_{t-1}, X)$$
 这是论文的核心模型，旨在将大小为 $n$ 的输入集合 $X = \{x_1, \dots, x_n\}$ 编码为一个固定且置换不变的向量。
 
 **Block 1: Read（读取）**
-[cite_start]将集合中的每个元素 $x_i$ 单独通过一个简单的神经网络（如 MLP）映射为记忆向量 $m_i$ [cite: 124]。
+将集合中的每个元素 $x_i$ 单独通过一个简单的神经网络（如 MLP）映射为记忆向量 $m_i$ 。
 $$m_i = \text{Embed}(x_i)$$
 由于这一步是逐元素进行的（Element-wise），它本身不包含顺序信息。
 
 **Block 2: Process（处理）**
-[cite_start]这是最关键的一步。为了融合全局信息并生成固定长度的表示，论文使用了一个**没有外部输入**的 LSTM，它运行 $T$ 个时间步。在每一步，LSTM 通过**注意力机制**读取记忆库 $\{m_i\}$ [cite: 125]。
+这是最关键的一步。为了融合全局信息并生成固定长度的表示，论文使用了一个**没有外部输入**的 LSTM，它运行 $T$ 个时间步。在每一步，LSTM 通过**注意力机制**读取记忆库 $\{m_i\}$ 。
 关键公式如下（基于论文 Eq 3-7）：
 $$q_t = \text{LSTM}(q_{t-1}^*) \quad \text{(LSTM更新状态)}$$
 $$e_{i,t} = f(m_i, q_t) \quad \text{(计算注意力分数)}$$
@@ -51,10 +51,10 @@ $$a_{i,t} = \frac{\exp(e_{i,t})}{\sum_j \exp(e_{j,t})} \quad \text{(Softmax归�
 $$r_t = \sum_i a_{i,t} m_i \quad \text{(读取上下文向量)}$$
 $$q_t^* = [q_t, r_t] \quad \text{(拼接状态与上下文)}$$
 **为什么这是置换不变的？**
-[cite_start]注意公式中的 $r_t$ 是通过加权求和（$\sum$）得到的。加法满足交换律，无论 $m_i$ 在内存中的物理顺序如何，只要注意力权重 $a_{i,t}$ 仅依赖于内容 $m_i$ 而非位置索引，计算出的 $r_t$ 就是一样的 [cite: 121, 137]。经过 $T$ 步处理后，LSTM 的最终状态 $q_T^*$ 被用作 Decoder 的初始输入。
+注意公式中的 $r_t$ 是通过加权求和（$\sum$）得到的。加法满足交换律，无论 $m_i$ 在内存中的物理顺序如何，只要注意力权重 $a_{i,t}$ 仅依赖于内容 $m_i$ 而非位置索引，计算出的 $r_t$ 就是一样的 。经过 $T$ 步处理后，LSTM 的最终状态 $q_T^*$ 被用作 Decoder 的初始输入。
 
 **Block 3: Write（写入）**
-[cite_start]使用一个标准的 LSTM Decoder 或 Pointer Network（指针网络），根据 $q_T^*$ 生成输出序列 [cite: 131]。如果输出是原集合的子集或排序（如排序任务），Pointer Network 效果更好。
+使用一个标准的 LSTM Decoder 或 Pointer Network（指针网络），根据 $q_T^*$ 生成输出序列 。如果输出是原集合的子集或排序（如排序任务），Pointer Network 效果更好。
 
 ```mermaid
 graph LR
@@ -93,23 +93,23 @@ graph LR
 
 ### 4.2 输出顺序优化（针对输出集合）
 
-当目标  是一个集合时，训练时的 Log-Likelihood 目标函数通常假设了某种顺序。论文提出一种改进的损失函数，在训练中搜索最佳顺序  ：
+当目标 `y` 是一个集合时，训练时的 Log-Likelihood 目标函数通常假设了某种顺序。论文提出一种改进的损失函数，在训练中搜索最佳顺序 `\pi^*`：
 
 
-即：对于每个训练样本，我们尝试找到一种让当前模型“最舒服”（概率最高）的输出排列方式，并只针对该排列计算梯度。由于遍历所有  种排列太慢，论文建议使用**重要性采样**或简单的贪心搜索来近似 。
+即：对于每个训练样本，我们尝试找到一种让当前模型“最舒服”（概率最高）的输出排列方式，并只针对该排列计算梯度。由于遍历所有 `n!` 种排列太慢，论文建议使用**重要性采样**或简单的贪心搜索来近似 `\pi^*`。
 
 ## 5. Experiment: 主实验与分析实验分别做了什么？结果如何？
 
 ### 5.1 排序任务（Sorting Experiment）
 
 * 
-**任务**：输入  个乱序数字，输出排序后的序列。这是测试 Set-to-Seq 能力的基准任务 。
+**任务**：输入 `n` 个乱序数字，输出排序后的序列。这是测试 Set-to-Seq 能力的基准任务。
 
 
 * **设置**：比较了传统的 Seq2Seq（LSTM Encoder）和论文提出的 Read-Process-Write 模型。
 * **结果**：
-* 当处理步数  时（即仅做简单的 Read），模型表现较差。
-* 随着  增加（Process LSTM 进行更多次思考），性能显著提升 。
+* 当处理步数 `P` 较小时（即仅做简单的 Read），模型表现较差。
+* 随着 `P` 增加（Process LSTM 进行更多次思考），性能显著提升。
 
 
 * **关键结论**：带有注意力机制的 Set Encoder 在处理集合输入时优于通过 LSTM 强行读取序列。
@@ -121,7 +121,7 @@ graph LR
 * **任务**：给定一组词（5-gram集合），恢复其原始句子顺序。
 * **实验**：
 * **Easy设定**：只包含正序和逆序两种排列。
-* **Hard设定**：包含所有  种排列。
+* **Hard设定**：包含所有 `5!` 种排列。
 
 
 * 
@@ -148,13 +148,13 @@ graph LR
 这份代码对应论文 **Section 4 (Input Sets)** 和 **Section 6 (Sorting Experiment)** 的核心逻辑。它实现了一个简化版的 **Read-Process-Write** 架构。
 
 * **对应关系**：
-* **Numpy `SetEncoder**`：对应论文的 Read 模块 + 简化的 Process 模块。
+* **Numpy `SetEncoder`**：对应论文的 Read 模块 + 简化的 Process 模块。
 * 当 `pooling='attention'` 时，它等价于论文中 Process 步数  的情况（做一次全局 Attention Read）。
 * 当 `pooling='mean/sum'` 时，对应 DeepSets 风格的简单聚合。
 
 
-* **Numpy `Attention**`：对应论文 Eq (3)-(6) 中的 Content-based Attention，计算  和 。
-* **Numpy `LSTMDecoder**`：对应 Write 模块，利用 Pointer/Attention 机制逐步生成结果。
+* **Numpy `Attention`**：对应论文 Eq (3)-(6) 中的 Content-based Attention，计算注意力分数与归一化权重。
+* **Numpy `LSTMDecoder`**：对应 Write 模块，利用 Pointer/Attention 机制逐步生成结果。
 
 
 * **张量形状 (Shape) 假设**：
@@ -817,3 +817,207 @@ class Set2Seq(nn.Module):
 
 
 ```
+
+<!-- AUTO_PDF_IMAGES_START -->
+
+## 论文原图（PDF）
+> 下图自动抽取自原论文 PDF，用于补充概念、结构和实验细节。
+> 来源：`08.pdf`
+
+![Seq2Seq for Sets 图 1](/paper-figures/08/page-1.png)
+*图 1：建议结合本节 `集合到序列映射` 一起阅读。*
+
+<!-- AUTO_PDF_IMAGES_END -->
+
+<!-- AUTO_INTERVIEW_QA_START -->
+
+## 面试题与答案
+> 主题：**Seq2Seq for Sets**（围绕 `集合到序列映射`）
+
+### 一、选择题（10题）
+
+1. 在 Seq2Seq for Sets 中，最关键的建模目标是什么？
+   - A. 集合到序列映射
+   - B. Read-Process-Write
+   - C. 顺序不变性
+   - D. Attention
+   - **答案：A**
+
+2. 下列哪一项最直接对应 Seq2Seq for Sets 的核心机制？
+   - A. Read-Process-Write
+   - B. 顺序不变性
+   - C. Attention
+   - D. Permutation
+   - **答案：B**
+
+3. 在复现 Seq2Seq for Sets 时，优先要保证哪项一致性？
+   - A. 只看最终分数
+   - B. 只看训练集表现
+   - C. 实现与论文设置对齐
+   - D. 忽略随机种子
+   - **答案：C**
+
+4. 对于 Seq2Seq for Sets，哪个指标最能反映方法有效性？
+   - A. 主指标与分组指标
+   - B. 只看单次结果
+   - C. 只看速度
+   - D. 只看参数量
+   - **答案：A**
+
+5. 当 Seq2Seq for Sets 模型出现效果退化时，首要检查项是什么？
+   - A. 数据与标签管线
+   - B. 先增大模型十倍
+   - C. 随机改损失函数
+   - D. 删除验证集
+   - **答案：A**
+
+6. Seq2Seq for Sets 与传统 baseline 的主要差异通常体现在？
+   - A. 归纳偏置与结构设计
+   - B. 仅参数更多
+   - C. 仅训练更久
+   - D. 仅学习率更小
+   - **答案：A**
+
+7. 若要提升 Seq2Seq for Sets 的泛化能力，最稳妥的做法是？
+   - A. 正则化+消融验证
+   - B. 只堆数据不复核
+   - C. 关闭评估脚本
+   - D. 取消对照组
+   - **答案：A**
+
+8. 关于 Seq2Seq for Sets 的实验设计，下列说法更合理的是？
+   - A. 固定变量做可复现实验
+   - B. 同时改十个超参
+   - C. 只展示最好一次
+   - D. 省略失败实验
+   - **答案：A**
+
+9. 在工程部署中，Seq2Seq for Sets 的常见风险是？
+   - A. 数值稳定与漂移
+   - B. 只关心GPU利用率
+   - C. 日志越少越好
+   - D. 不做回归测试
+   - **答案：A**
+
+10. 回到论文主张，Seq2Seq for Sets 最不应该被误解为？
+   - A. 可替代所有任务
+   - B. 有明确适用边界
+   - C. 不需要数据质量
+   - D. 不需要误差分析
+   - **答案：B**
+
+
+### 二、代码题（10题，含参考答案）
+
+1. 实现一个最小可运行的数据预处理函数，输出可用于 Seq2Seq for Sets 训练的批次。
+   - 参考答案：
+     ```python
+     import numpy as np
+     
+     def make_batch(x, y, batch_size=32):
+         idx = np.random.choice(len(x), batch_size, replace=False)
+         return x[idx], y[idx]
+     ```
+
+2. 实现 Seq2Seq for Sets 的核心前向步骤（简化版），并返回中间张量。
+   - 参考答案：
+     ```python
+     import numpy as np
+     
+     def forward_core(x, w, b):
+         z = x @ w + b
+         h = np.tanh(z)
+         return h, {"z": z, "h": h}
+     ```
+
+3. 写一个训练 step：前向、loss、反向、更新。
+   - 参考答案：
+     ```python
+     def train_step(model, optimizer, criterion, xb, yb):
+         optimizer.zero_grad()
+         pred = model(xb)
+         loss = criterion(pred, yb)
+         loss.backward()
+         optimizer.step()
+         return float(loss.item())
+     ```
+
+4. 实现一个评估函数，返回主指标与一个辅助指标。
+   - 参考答案：
+     ```python
+     import numpy as np
+     
+     def evaluate(y_true, y_pred):
+         acc = (y_true == y_pred).mean()
+         err = 1.0 - acc
+         return {"acc": float(acc), "err": float(err)}
+     ```
+
+5. 实现梯度裁剪与学习率调度的训练循环（简化版）。
+   - 参考答案：
+     ```python
+     import torch
+     
+     def train_loop(model, loader, optimizer, criterion, scheduler=None, clip=1.0):
+         model.train()
+         for xb, yb in loader:
+             optimizer.zero_grad()
+             loss = criterion(model(xb), yb)
+             loss.backward()
+             torch.nn.utils.clip_grad_norm_(model.parameters(), clip)
+             optimizer.step()
+             if scheduler is not None:
+                 scheduler.step()
+     ```
+
+6. 实现 ablation 开关：可切换是否启用 `Read-Process-Write`。
+   - 参考答案：
+     ```python
+     def forward_with_ablation(x, module, use_feature=True):
+         if use_feature:
+             return module(x)
+         return x
+     ```
+
+7. 实现一个鲁棒的数值稳定 softmax / logsumexp 工具函数。
+   - 参考答案：
+     ```python
+     import numpy as np
+     
+     def stable_softmax(x, axis=-1):
+         x = x - np.max(x, axis=axis, keepdims=True)
+         ex = np.exp(x)
+         return ex / np.sum(ex, axis=axis, keepdims=True)
+     ```
+
+8. 写一个小型单元测试，验证 `顺序不变性` 相关张量形状正确。
+   - 参考答案：
+     ```python
+     def test_shape(out, expected_last_dim):
+         assert out.ndim >= 2
+         assert out.shape[-1] == expected_last_dim
+     ```
+
+9. 实现模型推理包装器，支持 batch 输入并返回结构化结果。
+   - 参考答案：
+     ```python
+     def infer(model, xb):
+         logits = model(xb)
+         pred = logits.argmax(dim=-1)
+         return {"pred": pred, "logits": logits}
+     ```
+
+10. 实现一个实验记录器，保存超参、指标和随机种子。
+   - 参考答案：
+     ```python
+     import json
+     from pathlib import Path
+     
+     def save_run(path, cfg, metrics, seed):
+         payload = {"cfg": cfg, "metrics": metrics, "seed": seed}
+         Path(path).write_text(json.dumps(payload, ensure_ascii=False, indent=2))
+     ```
+
+
+<!-- AUTO_INTERVIEW_QA_END -->
+

@@ -8,21 +8,21 @@
 **核心问题**：尽管现代 LLM（如 GPT-4, Claude-100k）支持极长的上下文窗口（Context Window），但它们是否真的能有效利用整个窗口中的信息？特别是当关键线索被淹没在大量无关内容（distractors）中时，模型表现如何？
 
 **主要贡献**：
-1.  [cite_start]**发现 U 型性能曲线**：通过一系列对照实验，发现 LLM 擅长利用位于上下文**开头（Primacy bias）**和**结尾（Recency bias）**的信息，但对于位于**中间**的信息，性能显著下降 [cite: 14, 15]。
-2.  [cite_start]**多模型与多任务评估**：在多文档问答（Multi-document QA）和键值检索（Key-Value Retrieval）任务上，评估了 GPT-3.5, Claude, MPT-30B 等模型，证实该现象的普遍性 [cite: 40]。
-3.  [cite_start]**分析与建议**：研究了模型架构（Encoder-Decoder vs Decoder-only）、查询感知上下文（Query-aware contextualization）和指令微调的影响，并提出了基于重排序（Re-ranking）的简单优化策略 [cite: 16, 418]。
+1.  **发现 U 型性能曲线**：通过一系列对照实验，发现 LLM 擅长利用位于上下文**开头（Primacy bias）**和**结尾（Recency bias）**的信息，但对于位于**中间**的信息，性能显著下降 。
+2.  **多模型与多任务评估**：在多文档问答（Multi-document QA）和键值检索（Key-Value Retrieval）任务上，评估了 GPT-3.5, Claude, MPT-30B 等模型，证实该现象的普遍性 。
+3.  **分析与建议**：研究了模型架构（Encoder-Decoder vs Decoder-only）、查询感知上下文（Query-aware contextualization）和指令微调的影响，并提出了基于重排序（Re-ranking）的简单优化策略 。
 
 ## 3. Introduction: 论文的动机是什么？请仔细梳理整个故事逻辑
 
 **动机（Motivation）**：
-[cite_start]随着硬件和算法的进步，LLM 的上下文窗口越来越大（从 2k 到 100k+ tokens），这使得“检索增强生成”（RAG）等应用可以直接将大量搜索结果塞入 Prompt 中 [cite: 37, 39][cite_start]。然而，学术界缺乏对“模型如何利用长上下文”的精细化理解。虽然困惑度（Perplexity）通常随上下文增加而降低，但这并不等同于模型能精准提取信息 [cite: 426]。
+随着硬件和算法的进步，LLM 的上下文窗口越来越大（从 2k 到 100k+ tokens），这使得“检索增强生成”（RAG）等应用可以直接将大量搜索结果塞入 Prompt 中 。然而，学术界缺乏对“模型如何利用长上下文”的精细化理解。虽然困惑度（Perplexity）通常随上下文增加而降低，但这并不等同于模型能精准提取信息 。
 
 **逻辑链条**：
-1.  [cite_start]**实验设计**：为了剥离干扰，作者设计了两个只需“识别并提取”的任务：多文档问答（需推理）和键值检索（纯检索）。这使得研究者可以精确控制相关信息在 Prompt 中的位置 [cite: 43, 53]。
-2.  [cite_start]**现象观测**：实验结果令人震惊。在某些情况下，向模型提供更多上下文（如果不含相关信息）甚至会降低性能；而当相关信息位于中间时，GPT-3.5 的表现甚至不如完全不提供文档（Closed-book）[cite: 50, 195]。
-3.  [cite_start]**深入探究**：这种偏差并非仅由 Transformer 的自注意力机制导致，因为即使是专门针对长文本优化的模型（如 LongChat-16k）也未能幸免 [cite: 51]。
-4.  [cite_start]**架构对比**：研究发现 Encoder-Decoder 模型（如 Flan-UL2）在训练长度内表现较好，但在外推（Extrapolation）时依然会出现 U 型曲线 [cite: 59]。
-5.  [cite_start]**实际意义**：这直接挑战了“上下文越长越好”的假设，提示我们在 RAG 系统中必须对检索结果进行重排序，将高置信度结果放在 Prompt 的首尾 [cite: 418]。
+1.  **实验设计**：为了剥离干扰，作者设计了两个只需“识别并提取”的任务：多文档问答（需推理）和键值检索（纯检索）。这使得研究者可以精确控制相关信息在 Prompt 中的位置 。
+2.  **现象观测**：实验结果令人震惊。在某些情况下，向模型提供更多上下文（如果不含相关信息）甚至会降低性能；而当相关信息位于中间时，GPT-3.5 的表现甚至不如完全不提供文档（Closed-book）。
+3.  **深入探究**：这种偏差并非仅由 Transformer 的自注意力机制导致，因为即使是专门针对长文本优化的模型（如 LongChat-16k）也未能幸免 。
+4.  **架构对比**：研究发现 Encoder-Decoder 模型（如 Flan-UL2）在训练长度内表现较好，但在外推（Extrapolation）时依然会出现 U 型曲线 。
+5.  **实际意义**：这直接挑战了“上下文越长越好”的假设，提示我们在 RAG 系统中必须对检索结果进行重排序，将高置信度结果放在 Prompt 的首尾 。
 
 ## 4. Method: 解决方案是什么？请梳理步骤、公式、策略
 
@@ -33,18 +33,18 @@
 
 * **输入构成**：$Input = Question + \{Doc_1, Doc_2, ..., Doc_k\}$。
 * **变量控制**：
-    1.  [cite_start]**上下文长度**：通过增加无关文档（Distractor Documents）的数量 $k$ 来调整（10, 20, 30 个文档）[cite: 45]。
-    2.  [cite_start]**相关信息位置**：将包含答案的唯一相关文档（Oracle Document）放置在输入序列的第 $0$ 到第 $k-1$ 个位置，观察准确率变化 [cite: 45]。
+    1.  **上下文长度**：通过增加无关文档（Distractor Documents）的数量 $k$ 来调整（10, 20, 30 个文档）。
+    2.  **相关信息位置**：将包含答案的唯一相关文档（Oracle Document）放置在输入序列的第 $0$ 到第 $k-1$ 个位置，观察准确率变化 。
 
 ### 4.2 任务定义
 1.  **多文档问答 (Multi-Document QA)**：
-    [cite_start]使用 NaturalQuestions-Open 数据集。给定一个问题和 $k$ 个文档（其中 1 个含答案，其余由 Contriever 检索生成的无关文档），要求模型输出答案 [cite: 76, 85]。
-    > [cite_start]"In the input context, the distractor documents are presented in order of decreasing relevance." [cite: 86]
+    使用 NaturalQuestions-Open 数据集。给定一个问题和 $k$ 个文档（其中 1 个含答案，其余由 Contriever 检索生成的无关文档），要求模型输出答案 。
+    > "In the input context, the distractor documents are presented in order of decreasing relevance." 
     *注意：实验中人为打乱顺序以测试位置效应。*
 
 2.  **键值检索 (Key-Value Retrieval)**：
     合成任务。输入一个 JSON 对象，包含 $k$ 个键值对（UUID），给定一个 Key，要求模型输出对应的 Value。
-    * [cite_start]目的：剥离自然语言的语义干扰，纯粹测试注意力机制的检索能力 [cite: 53]。
+    * 目的：剥离自然语言的语义干扰，纯粹测试注意力机制的检索能力 。
 
 ### 4.3 流程逻辑框图 (Mermaid)
 
@@ -649,7 +649,7 @@ if __name__ == "__main__":
 
 1. **向量化思维 (Vectorization)**：
 * **Numpy 原版**：使用 `for` 循环遍历每个位置来模拟 `test_all_positions`。逻辑是“放置文档 -> 计算权重 -> 提取对应权重”。
-* **Torch 版**：直接计算出长度为  的权重张量。由于模拟器的准确率定义就是该位置的归一化权重，因此 `weights[i]` 本身就是当相关文档位于  时的准确率。这一步消除了 Python 循环，计算复杂度从  降为 （GPU 并行下）。
+* **Torch 版**：直接计算出长度为 `n_docs` 的权重张量。由于模拟器的准确率定义就是该位置的归一化权重，因此 `weights[i]` 本身就是当相关文档位于位置 `i` 时的准确率。这一步消除了 Python 循环，计算复杂度从 `O(n_docs)` 的逐位置循环改为张量并行计算（GPU 下吞吐更高）。
 
 
 2. **索引操作 (Indexing & Gathering)**：
@@ -665,3 +665,207 @@ if __name__ == "__main__":
 
 
 ```
+
+<!-- AUTO_PDF_IMAGES_START -->
+
+## 论文原图（PDF）
+> 下图自动抽取自原论文 PDF，用于补充概念、结构和实验细节。
+> 来源：`30.pdf`
+
+![Lost in the Middle 图 1](/paper-figures/30/page-1.png)
+*图 1：建议结合本节 `长上下文位置效应` 一起阅读。*
+
+<!-- AUTO_PDF_IMAGES_END -->
+
+<!-- AUTO_INTERVIEW_QA_START -->
+
+## 面试题与答案
+> 主题：**Lost in the Middle**（围绕 `长上下文位置效应`）
+
+### 一、选择题（10题）
+
+1. 在 Lost in the Middle 中，最关键的建模目标是什么？
+   - A. 长上下文位置效应
+   - B. 位置偏置
+   - C. middle drop
+   - D. 排序
+   - **答案：A**
+
+2. 下列哪一项最直接对应 Lost in the Middle 的核心机制？
+   - A. 位置偏置
+   - B. middle drop
+   - C. 排序
+   - D. 文档放置
+   - **答案：B**
+
+3. 在复现 Lost in the Middle 时，优先要保证哪项一致性？
+   - A. 只看最终分数
+   - B. 只看训练集表现
+   - C. 实现与论文设置对齐
+   - D. 忽略随机种子
+   - **答案：C**
+
+4. 对于 Lost in the Middle，哪个指标最能反映方法有效性？
+   - A. 主指标与分组指标
+   - B. 只看单次结果
+   - C. 只看速度
+   - D. 只看参数量
+   - **答案：A**
+
+5. 当 Lost in the Middle 模型出现效果退化时，首要检查项是什么？
+   - A. 数据与标签管线
+   - B. 先增大模型十倍
+   - C. 随机改损失函数
+   - D. 删除验证集
+   - **答案：A**
+
+6. Lost in the Middle 与传统 baseline 的主要差异通常体现在？
+   - A. 归纳偏置与结构设计
+   - B. 仅参数更多
+   - C. 仅训练更久
+   - D. 仅学习率更小
+   - **答案：A**
+
+7. 若要提升 Lost in the Middle 的泛化能力，最稳妥的做法是？
+   - A. 正则化+消融验证
+   - B. 只堆数据不复核
+   - C. 关闭评估脚本
+   - D. 取消对照组
+   - **答案：A**
+
+8. 关于 Lost in the Middle 的实验设计，下列说法更合理的是？
+   - A. 固定变量做可复现实验
+   - B. 同时改十个超参
+   - C. 只展示最好一次
+   - D. 省略失败实验
+   - **答案：A**
+
+9. 在工程部署中，Lost in the Middle 的常见风险是？
+   - A. 数值稳定与漂移
+   - B. 只关心GPU利用率
+   - C. 日志越少越好
+   - D. 不做回归测试
+   - **答案：A**
+
+10. 回到论文主张，Lost in the Middle 最不应该被误解为？
+   - A. 可替代所有任务
+   - B. 有明确适用边界
+   - C. 不需要数据质量
+   - D. 不需要误差分析
+   - **答案：B**
+
+
+### 二、代码题（10题，含参考答案）
+
+1. 实现一个最小可运行的数据预处理函数，输出可用于 Lost in the Middle 训练的批次。
+   - 参考答案：
+     ```python
+     import numpy as np
+     
+     def make_batch(x, y, batch_size=32):
+         idx = np.random.choice(len(x), batch_size, replace=False)
+         return x[idx], y[idx]
+     ```
+
+2. 实现 Lost in the Middle 的核心前向步骤（简化版），并返回中间张量。
+   - 参考答案：
+     ```python
+     import numpy as np
+     
+     def forward_core(x, w, b):
+         z = x @ w + b
+         h = np.tanh(z)
+         return h, {"z": z, "h": h}
+     ```
+
+3. 写一个训练 step：前向、loss、反向、更新。
+   - 参考答案：
+     ```python
+     def train_step(model, optimizer, criterion, xb, yb):
+         optimizer.zero_grad()
+         pred = model(xb)
+         loss = criterion(pred, yb)
+         loss.backward()
+         optimizer.step()
+         return float(loss.item())
+     ```
+
+4. 实现一个评估函数，返回主指标与一个辅助指标。
+   - 参考答案：
+     ```python
+     import numpy as np
+     
+     def evaluate(y_true, y_pred):
+         acc = (y_true == y_pred).mean()
+         err = 1.0 - acc
+         return {"acc": float(acc), "err": float(err)}
+     ```
+
+5. 实现梯度裁剪与学习率调度的训练循环（简化版）。
+   - 参考答案：
+     ```python
+     import torch
+     
+     def train_loop(model, loader, optimizer, criterion, scheduler=None, clip=1.0):
+         model.train()
+         for xb, yb in loader:
+             optimizer.zero_grad()
+             loss = criterion(model(xb), yb)
+             loss.backward()
+             torch.nn.utils.clip_grad_norm_(model.parameters(), clip)
+             optimizer.step()
+             if scheduler is not None:
+                 scheduler.step()
+     ```
+
+6. 实现 ablation 开关：可切换是否启用 `位置偏置`。
+   - 参考答案：
+     ```python
+     def forward_with_ablation(x, module, use_feature=True):
+         if use_feature:
+             return module(x)
+         return x
+     ```
+
+7. 实现一个鲁棒的数值稳定 softmax / logsumexp 工具函数。
+   - 参考答案：
+     ```python
+     import numpy as np
+     
+     def stable_softmax(x, axis=-1):
+         x = x - np.max(x, axis=axis, keepdims=True)
+         ex = np.exp(x)
+         return ex / np.sum(ex, axis=axis, keepdims=True)
+     ```
+
+8. 写一个小型单元测试，验证 `middle drop` 相关张量形状正确。
+   - 参考答案：
+     ```python
+     def test_shape(out, expected_last_dim):
+         assert out.ndim >= 2
+         assert out.shape[-1] == expected_last_dim
+     ```
+
+9. 实现模型推理包装器，支持 batch 输入并返回结构化结果。
+   - 参考答案：
+     ```python
+     def infer(model, xb):
+         logits = model(xb)
+         pred = logits.argmax(dim=-1)
+         return {"pred": pred, "logits": logits}
+     ```
+
+10. 实现一个实验记录器，保存超参、指标和随机种子。
+   - 参考答案：
+     ```python
+     import json
+     from pathlib import Path
+     
+     def save_run(path, cfg, metrics, seed):
+         payload = {"cfg": cfg, "metrics": metrics, "seed": seed}
+         Path(path).write_text(json.dumps(payload, ensure_ascii=False, indent=2))
+     ```
+
+
+<!-- AUTO_INTERVIEW_QA_END -->
+

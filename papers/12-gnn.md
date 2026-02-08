@@ -61,37 +61,37 @@ MPNN 的前向传播分为两个主要阶段：**消息传递阶段** 和 **读�
 
 #### 1. 消息传递阶段 (Message Passing Phase)
 
-该阶段运行  个时间步。在每个时间步 ，图中每个节点  的隐藏状态  根据邻居节点发来的消息进行更新。包含两个核心函数：
+该阶段运行 `T` 个时间步。在每个时间步 `t`，图中每个节点 `v` 的隐藏状态 `h_v^t` 根据邻居节点发来的消息进行更新。包含两个核心函数：
 
-* **消息函数 (Message Function) **：
-* **节点更新函数 (Vertex Update Function) **：
+* **消息函数 (Message Function)**：`m_v^{t+1} = \sum_{u\in\mathcal{N}(v)} M_t(h_v^t, h_u^t, e_{vu})`
+* **节点更新函数 (Vertex Update Function)**：`h_v^{t+1} = U_t(h_v^t, m_v^{t+1})`
 
 公式如下 ：
 
 
-其中， 是节点  的邻居集合， 是边特征（如键类型、距离）。这一步使得信息能够在图中传播，每个节点逐渐获得其局部和全局的上下文信息。
+其中，`\mathcal{N}(v)` 是节点 `v` 的邻居集合，`e_{vu}` 是边特征（如键类型、距离）。这一步使得信息能够在图中传播，每个节点逐渐获得局部和全局上下文信息。
 
 #### 2. 读出阶段 (Readout Phase)
 
-在  步消息传递后，利用一个读出函数  将所有节点的最终状态聚合为整个图的特征向量  ：
+在 `T` 步消息传递后，利用读出函数 `R` 将所有节点最终状态聚合为图级特征向量 `\hat y`：
 
 
-函数  必须对节点排列保持不变（invariant to permutations），以保证图同构不变性 。
+函数 `R` 必须对节点排列保持不变（invariant to permutations），以保证图同构不变性。
 
 ### 4.2 论文提出的最佳变体 (State of the Art)
 
 作者在框架内进行了大量消融实验，最终确定的最佳配置如下：
 
 1. **消息函数：Edge Network**
-作者并未使用简单的矩阵乘法，而是设计了一个神经网络 ，将边特征映射为一个矩阵，再与邻居节点状态相乘 ：
+作者并未使用简单的矩阵乘法，而是设计了一个神经网络 `A(e_{vu})`，将边特征映射为一个矩阵，再与邻居节点状态相乘：
 
 
 
 
 
-这里  是一个将边向量映射为  矩阵的神经网络。这种方法能很好地处理连续的边特征（如原子间距离）。
+这里 `A` 是一个将边向量映射为 `d x d` 矩阵的神经网络。这种方法能很好地处理连续边特征（如原子间距离）。
 2. **更新函数：GRU**
-采用门控循环单元（GRU），将上一时刻的节点状态  作为记忆，新消息  作为输入 。
+采用门控循环单元（GRU），将上一时刻节点状态 `h_v^t` 作为记忆，新消息 `m_v^{t+1}` 作为输入。
 
 
 3. **读出函数：Set2Set**
@@ -192,15 +192,15 @@ graph LR
 下方的代码实现主要对应论文 **Section 2 (公式 1, 2) 和 Section 5.1** 的通用 MPNN 逻辑。
 
 * **对应部分**：
-* `message` 函数对应论文中的通用消息形式 。注意：提供的 Numpy 代码实现的是一个由 `tanh` 激活的 MLP，输入是 `[h_src, h_tgt, e_feat]` 的拼接。这接近于论文 5.1 节提到的 "Pair Message" 变体（Battaglia et al., 2016），虽然论文最终推荐的是 "Edge Network"，但 Numpy 代码展示的是更通用的拼接式消息传递。
-* `aggregate` 对应公式 (1) 中的求和符号 。
-* `update` 对应公式 (2) 中的 。
+* `message` 函数对应论文中的通用消息形式 `M_t(h_v^t,h_u^t,e_{vu})`。注意：提供的 Numpy 代码实现的是 `tanh` 激活 MLP，输入是 `[h_src, h_tgt, e_feat]` 的拼接。这接近于论文 5.1 节提到的 "Pair Message" 变体（Battaglia et al., 2016），虽然论文最终推荐的是 "Edge Network"，但 Numpy 代码展示的是更通用的拼接式消息传递。
+* `aggregate` 对应公式 (1) 中的求和符号 `\sum_{u\in\mathcal{N}(v)}`。
+* `update` 对应公式 (2) 中的 `U_t(\cdot)`。
 
 
 * **张量形状假设**：
-* `node_dim` (): 节点特征维度。
-* `edge_dim` (): 边特征维度。
-* `hidden_dim` (): 隐藏层维度。
+* `node_dim`：节点特征维度。
+* `edge_dim`：边特征维度。
+* `hidden_dim`：隐藏层维度。
 * Numpy 代码是逐节点循环（非 batch 化），Torch 实现将基于 `edge_index` 进行全图向量化操作，假设处理单个图或已 batch 化的 `BlockDiagonal` 大图。
 
 
@@ -720,3 +720,207 @@ if __name__ == "__main__":
 4. **数值稳定性与初始化**
 * Numpy 代码使用了 `np.tanh` 作为激活函数，这也是 MPNN 论文早期常用的激活函数（尽管现在 ReLU 更流行）。Torch 版为了“完全等价复现”，也保留了 `torch.tanh`。
 * Numpy 手动初始化权重 `* 0.01`。Torch 的 `nn.Linear` 默认使用 Kaiming/Xavier 初始化，若要完全对齐数值，需手动重置 Torch 参数，但在生产代码中通常使用 Torch 默认值即可。
+
+<!-- AUTO_PDF_IMAGES_START -->
+
+## 论文原图（PDF）
+> 下图自动抽取自原论文 PDF，用于补充概念、结构和实验细节。
+> 来源：`12.pdf`
+
+![MPNN / GNN 图 1](/paper-figures/12/page-1.png)
+*图 1：建议结合本节 `图消息传递` 一起阅读。*
+
+<!-- AUTO_PDF_IMAGES_END -->
+
+<!-- AUTO_INTERVIEW_QA_START -->
+
+## 面试题与答案
+> 主题：**MPNN / GNN**（围绕 `图消息传递`）
+
+### 一、选择题（10题）
+
+1. 在 MPNN / GNN 中，最关键的建模目标是什么？
+   - A. 图消息传递
+   - B. 消息函数
+   - C. 聚合
+   - D. 读出
+   - **答案：A**
+
+2. 下列哪一项最直接对应 MPNN / GNN 的核心机制？
+   - A. 消息函数
+   - B. 聚合
+   - C. 读出
+   - D. 节点特征
+   - **答案：B**
+
+3. 在复现 MPNN / GNN 时，优先要保证哪项一致性？
+   - A. 只看最终分数
+   - B. 只看训练集表现
+   - C. 实现与论文设置对齐
+   - D. 忽略随机种子
+   - **答案：C**
+
+4. 对于 MPNN / GNN，哪个指标最能反映方法有效性？
+   - A. 主指标与分组指标
+   - B. 只看单次结果
+   - C. 只看速度
+   - D. 只看参数量
+   - **答案：A**
+
+5. 当 MPNN / GNN 模型出现效果退化时，首要检查项是什么？
+   - A. 数据与标签管线
+   - B. 先增大模型十倍
+   - C. 随机改损失函数
+   - D. 删除验证集
+   - **答案：A**
+
+6. MPNN / GNN 与传统 baseline 的主要差异通常体现在？
+   - A. 归纳偏置与结构设计
+   - B. 仅参数更多
+   - C. 仅训练更久
+   - D. 仅学习率更小
+   - **答案：A**
+
+7. 若要提升 MPNN / GNN 的泛化能力，最稳妥的做法是？
+   - A. 正则化+消融验证
+   - B. 只堆数据不复核
+   - C. 关闭评估脚本
+   - D. 取消对照组
+   - **答案：A**
+
+8. 关于 MPNN / GNN 的实验设计，下列说法更合理的是？
+   - A. 固定变量做可复现实验
+   - B. 同时改十个超参
+   - C. 只展示最好一次
+   - D. 省略失败实验
+   - **答案：A**
+
+9. 在工程部署中，MPNN / GNN 的常见风险是？
+   - A. 数值稳定与漂移
+   - B. 只关心GPU利用率
+   - C. 日志越少越好
+   - D. 不做回归测试
+   - **答案：A**
+
+10. 回到论文主张，MPNN / GNN 最不应该被误解为？
+   - A. 可替代所有任务
+   - B. 有明确适用边界
+   - C. 不需要数据质量
+   - D. 不需要误差分析
+   - **答案：B**
+
+
+### 二、代码题（10题，含参考答案）
+
+1. 实现一个最小可运行的数据预处理函数，输出可用于 MPNN / GNN 训练的批次。
+   - 参考答案：
+     ```python
+     import numpy as np
+     
+     def make_batch(x, y, batch_size=32):
+         idx = np.random.choice(len(x), batch_size, replace=False)
+         return x[idx], y[idx]
+     ```
+
+2. 实现 MPNN / GNN 的核心前向步骤（简化版），并返回中间张量。
+   - 参考答案：
+     ```python
+     import numpy as np
+     
+     def forward_core(x, w, b):
+         z = x @ w + b
+         h = np.tanh(z)
+         return h, {"z": z, "h": h}
+     ```
+
+3. 写一个训练 step：前向、loss、反向、更新。
+   - 参考答案：
+     ```python
+     def train_step(model, optimizer, criterion, xb, yb):
+         optimizer.zero_grad()
+         pred = model(xb)
+         loss = criterion(pred, yb)
+         loss.backward()
+         optimizer.step()
+         return float(loss.item())
+     ```
+
+4. 实现一个评估函数，返回主指标与一个辅助指标。
+   - 参考答案：
+     ```python
+     import numpy as np
+     
+     def evaluate(y_true, y_pred):
+         acc = (y_true == y_pred).mean()
+         err = 1.0 - acc
+         return {"acc": float(acc), "err": float(err)}
+     ```
+
+5. 实现梯度裁剪与学习率调度的训练循环（简化版）。
+   - 参考答案：
+     ```python
+     import torch
+     
+     def train_loop(model, loader, optimizer, criterion, scheduler=None, clip=1.0):
+         model.train()
+         for xb, yb in loader:
+             optimizer.zero_grad()
+             loss = criterion(model(xb), yb)
+             loss.backward()
+             torch.nn.utils.clip_grad_norm_(model.parameters(), clip)
+             optimizer.step()
+             if scheduler is not None:
+                 scheduler.step()
+     ```
+
+6. 实现 ablation 开关：可切换是否启用 `消息函数`。
+   - 参考答案：
+     ```python
+     def forward_with_ablation(x, module, use_feature=True):
+         if use_feature:
+             return module(x)
+         return x
+     ```
+
+7. 实现一个鲁棒的数值稳定 softmax / logsumexp 工具函数。
+   - 参考答案：
+     ```python
+     import numpy as np
+     
+     def stable_softmax(x, axis=-1):
+         x = x - np.max(x, axis=axis, keepdims=True)
+         ex = np.exp(x)
+         return ex / np.sum(ex, axis=axis, keepdims=True)
+     ```
+
+8. 写一个小型单元测试，验证 `聚合` 相关张量形状正确。
+   - 参考答案：
+     ```python
+     def test_shape(out, expected_last_dim):
+         assert out.ndim >= 2
+         assert out.shape[-1] == expected_last_dim
+     ```
+
+9. 实现模型推理包装器，支持 batch 输入并返回结构化结果。
+   - 参考答案：
+     ```python
+     def infer(model, xb):
+         logits = model(xb)
+         pred = logits.argmax(dim=-1)
+         return {"pred": pred, "logits": logits}
+     ```
+
+10. 实现一个实验记录器，保存超参、指标和随机种子。
+   - 参考答案：
+     ```python
+     import json
+     from pathlib import Path
+     
+     def save_run(path, cfg, metrics, seed):
+         payload = {"cfg": cfg, "metrics": metrics, "seed": seed}
+         Path(path).write_text(json.dumps(payload, ensure_ascii=False, indent=2))
+     ```
+
+
+<!-- AUTO_INTERVIEW_QA_END -->
+

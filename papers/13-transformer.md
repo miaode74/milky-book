@@ -33,7 +33,7 @@
 ## 3. Introduction: 论文的动机是什么？请仔细梳理整个故事逻辑
 
 **故事背景与痛点**：
-RNN（如 LSTM、GRU）通过维护隐藏状态  来处理序列，其中  依赖于  和输入 。这种**顺序计算的约束（Sequential Computation Constraint）** 使得模型无法在训练样本内部进行并行化 。虽然注意力机制已经成为序列模型的关键部分，但此前它几乎总是与 RNN 结合使用 。
+RNN（如 LSTM、GRU）通过维护隐藏状态 `h_t` 来处理序列，其中 `h_t` 依赖于 `h_{t-1}` 和输入 `x_t`。这种**顺序计算约束（Sequential Computation Constraint）**使模型难以在样本内部并行化。虽然注意力机制已是序列建模关键组件，但在 Transformer 之前它大多仍与 RNN 绑定使用。
 
 **核心动机**：
 作者希望能有一种架构，既能减少顺序计算以利用并行硬件，又能缩短长距离依赖在网络中的传播路径 。
@@ -46,7 +46,7 @@ RNN（如 LSTM、GRU）通过维护隐藏状态  来处理序列，其中  依�
 
 
 3. 
-**拥抱 Attention**：Transformer 将这种操作次数降低到了常数级别  。通过 Self-Attention（自注意力），模型可以直接计算序列中任意两个位置的关联，而不受距离限制 。
+**拥抱 Attention**：Transformer 将长距离依赖的路径长度降到常数级别。通过 Self-Attention（自注意力），模型可以直接计算序列中任意两个位置的关联，而不受距离限制。
 
 
 
@@ -57,41 +57,36 @@ Transformer 依然沿用了经典的 **Encoder-Decoder** 架构 ，但其内部�
 ### 4.1 整体架构
 
 * 
-**Encoder**：由  层堆叠而成。每层包含两个子层：多头自注意力（Multi-Head Self-Attention）和点式前馈网络（Position-wise Feed-Forward Network）。
+**Encoder**：由 `N=6` 层堆叠而成。每层包含两个子层：多头自注意力（Multi-Head Self-Attention）和点式前馈网络（Position-wise Feed-Forward Network）。
 
 
 * 
-**Decoder**：同样由  层堆叠。除了 Encoder 中的两个子层外，还插入了第三个子层，用于对 Encoder 的输出执行多头注意力（Cross-Attention）。
+**Decoder**：同样由 `N=6` 层堆叠。除了 Encoder 中的两个子层外，还插入第三个子层，用于对 Encoder 输出执行多头注意力（Cross-Attention）。
 
 
 * 
-**残差与归一化**：每个子层后都接残差连接和层归一化（Layer Normalization），即  。
+**残差与归一化**：每个子层后都接残差连接和层归一化（Layer Normalization），形式为 `LayerNorm(x + Sublayer(x))`。
 
 
 
 ### 4.2 核心组件：Scaled Dot-Product Attention
 
-这是 Transformer 的计算引擎。输入由 Query ()、Key () 和 Value () 组成。输出是 Value 的加权和。
+这是 Transformer 的计算引擎。输入由 Query (`Q`)、Key (`K`) 和 Value (`V`) 组成。输出是 Value 的加权和。
 
 **公式**：
-
-
-
-
-* **为什么要除以 （Scaled）？**
-当  较大时，点积结果的量级会变得很大，导致 Softmax 进入梯度极小的饱和区 。缩放因子抵消了这种影响。
+$$\mathrm{Attention}(Q,K,V)=\mathrm{softmax}\left(\frac{QK^T}{\sqrt{d_k}}\right)V$$
+* **为什么要除以 `\sqrt{d_k}`（Scaled）？**
+当 `d_k` 较大时，点积结果量级变大，Softmax 容易进入梯度很小的饱和区。缩放因子可以抵消这一影响。
 
 
 
 ### 4.3 Multi-Head Attention (多头注意力)
 
-作者发现，与其使用单个注意力头，不如将  线性投影  次（本文 ），映射到不同的子空间 。
+作者发现，与其使用单个注意力头，不如将 `Q/K/V` 线性投影 `h` 次（本文 `h=8`），映射到不同子空间。
 
 **公式**：
-
-
-其中每个头  。
-这允许模型同时关注来自不同位置的不同表示子空间的信息 。
+$$\mathrm{MultiHead}(Q,K,V)=\mathrm{Concat}(head_1,\dots,head_h)W^O,\quad head_i=\mathrm{Attention}(QW_i^Q,KW_i^K,VW_i^V)$$
+这允许模型同时关注来自不同位置、不同表示子空间的信息。
 
 ### 4.4 Position-wise Feed-Forward Networks (FFN)
 
@@ -162,15 +157,15 @@ graph TD
 作者通过调整 Base 模型参数验证了各组件的重要性：
 
 1. 
-**注意力头数 ()**：头数太少（）效果差（丢 0.9 BLEU），但头数太多（）效果也会下降 。
+**注意力头数 (`h`)**：头数太少时表达能力不足；头数过多时（在固定 `d_model` 下）每头维度变窄，也会带来性能下降。
 
 
 2. 
-**Key 的维度 ()**：降低  会损害模型质量，表明点积兼容性的匹配并不容易 。
+**Key 的维度 (`d_k`)**：将 `d_k` 设得过小会损害模型质量，表明点积匹配空间仍需足够容量。
 
 
 3. 
-**模型规模**：更大的模型（更多层、更大 ）效果更好 。
+**模型规模**：更大的模型（更多层、更大 `d_model`）效果更好。
 
 
 4. 
@@ -767,3 +762,213 @@ print(f"Torch Block Output Shape: {output.shape}")
 
 5. **数值稳定性**：
 * **Softmax**: Numpy 版本手动实现了 `exp(x - max)` 以防溢出。Torch 的 `F.softmax` 内部已经高度优化并处理了数值稳定性问题，直接调用即可。
+
+<!-- AUTO_PDF_IMAGES_START -->
+
+## 论文原图（PDF）
+> 下图自动抽取自原论文 PDF，用于补充概念、结构和实验细节。
+> 来源：`13.pdf`
+
+![Transformer 图 1](/paper-figures/13/img-000.png)
+*图 1：建议结合本节 `自注意力序列建模` 一起阅读。*
+
+![Transformer 图 2](/paper-figures/13/img-001.png)
+*图 2：建议结合本节 `自注意力序列建模` 一起阅读。*
+
+![Transformer 图 3](/paper-figures/13/img-004.png)
+*图 3：建议结合本节 `自注意力序列建模` 一起阅读。*
+
+<!-- AUTO_PDF_IMAGES_END -->
+
+<!-- AUTO_INTERVIEW_QA_START -->
+
+## 面试题与答案
+> 主题：**Transformer**（围绕 `自注意力序列建模`）
+
+### 一、选择题（10题）
+
+1. 在 Transformer 中，最关键的建模目标是什么？
+   - A. 自注意力序列建模
+   - B. Self-Attention
+   - C. Multi-Head
+   - D. 位置编码
+   - **答案：A**
+
+2. 下列哪一项最直接对应 Transformer 的核心机制？
+   - A. Self-Attention
+   - B. Multi-Head
+   - C. 位置编码
+   - D. FFN
+   - **答案：B**
+
+3. 在复现 Transformer 时，优先要保证哪项一致性？
+   - A. 只看最终分数
+   - B. 只看训练集表现
+   - C. 实现与论文设置对齐
+   - D. 忽略随机种子
+   - **答案：C**
+
+4. 对于 Transformer，哪个指标最能反映方法有效性？
+   - A. 主指标与分组指标
+   - B. 只看单次结果
+   - C. 只看速度
+   - D. 只看参数量
+   - **答案：A**
+
+5. 当 Transformer 模型出现效果退化时，首要检查项是什么？
+   - A. 数据与标签管线
+   - B. 先增大模型十倍
+   - C. 随机改损失函数
+   - D. 删除验证集
+   - **答案：A**
+
+6. Transformer 与传统 baseline 的主要差异通常体现在？
+   - A. 归纳偏置与结构设计
+   - B. 仅参数更多
+   - C. 仅训练更久
+   - D. 仅学习率更小
+   - **答案：A**
+
+7. 若要提升 Transformer 的泛化能力，最稳妥的做法是？
+   - A. 正则化+消融验证
+   - B. 只堆数据不复核
+   - C. 关闭评估脚本
+   - D. 取消对照组
+   - **答案：A**
+
+8. 关于 Transformer 的实验设计，下列说法更合理的是？
+   - A. 固定变量做可复现实验
+   - B. 同时改十个超参
+   - C. 只展示最好一次
+   - D. 省略失败实验
+   - **答案：A**
+
+9. 在工程部署中，Transformer 的常见风险是？
+   - A. 数值稳定与漂移
+   - B. 只关心GPU利用率
+   - C. 日志越少越好
+   - D. 不做回归测试
+   - **答案：A**
+
+10. 回到论文主张，Transformer 最不应该被误解为？
+   - A. 可替代所有任务
+   - B. 有明确适用边界
+   - C. 不需要数据质量
+   - D. 不需要误差分析
+   - **答案：B**
+
+
+### 二、代码题（10题，含参考答案）
+
+1. 实现一个最小可运行的数据预处理函数，输出可用于 Transformer 训练的批次。
+   - 参考答案：
+     ```python
+     import numpy as np
+     
+     def make_batch(x, y, batch_size=32):
+         idx = np.random.choice(len(x), batch_size, replace=False)
+         return x[idx], y[idx]
+     ```
+
+2. 实现 Transformer 的核心前向步骤（简化版），并返回中间张量。
+   - 参考答案：
+     ```python
+     import numpy as np
+     
+     def forward_core(x, w, b):
+         z = x @ w + b
+         h = np.tanh(z)
+         return h, {"z": z, "h": h}
+     ```
+
+3. 写一个训练 step：前向、loss、反向、更新。
+   - 参考答案：
+     ```python
+     def train_step(model, optimizer, criterion, xb, yb):
+         optimizer.zero_grad()
+         pred = model(xb)
+         loss = criterion(pred, yb)
+         loss.backward()
+         optimizer.step()
+         return float(loss.item())
+     ```
+
+4. 实现一个评估函数，返回主指标与一个辅助指标。
+   - 参考答案：
+     ```python
+     import numpy as np
+     
+     def evaluate(y_true, y_pred):
+         acc = (y_true == y_pred).mean()
+         err = 1.0 - acc
+         return {"acc": float(acc), "err": float(err)}
+     ```
+
+5. 实现梯度裁剪与学习率调度的训练循环（简化版）。
+   - 参考答案：
+     ```python
+     import torch
+     
+     def train_loop(model, loader, optimizer, criterion, scheduler=None, clip=1.0):
+         model.train()
+         for xb, yb in loader:
+             optimizer.zero_grad()
+             loss = criterion(model(xb), yb)
+             loss.backward()
+             torch.nn.utils.clip_grad_norm_(model.parameters(), clip)
+             optimizer.step()
+             if scheduler is not None:
+                 scheduler.step()
+     ```
+
+6. 实现 ablation 开关：可切换是否启用 `Self-Attention`。
+   - 参考答案：
+     ```python
+     def forward_with_ablation(x, module, use_feature=True):
+         if use_feature:
+             return module(x)
+         return x
+     ```
+
+7. 实现一个鲁棒的数值稳定 softmax / logsumexp 工具函数。
+   - 参考答案：
+     ```python
+     import numpy as np
+     
+     def stable_softmax(x, axis=-1):
+         x = x - np.max(x, axis=axis, keepdims=True)
+         ex = np.exp(x)
+         return ex / np.sum(ex, axis=axis, keepdims=True)
+     ```
+
+8. 写一个小型单元测试，验证 `Multi-Head` 相关张量形状正确。
+   - 参考答案：
+     ```python
+     def test_shape(out, expected_last_dim):
+         assert out.ndim >= 2
+         assert out.shape[-1] == expected_last_dim
+     ```
+
+9. 实现模型推理包装器，支持 batch 输入并返回结构化结果。
+   - 参考答案：
+     ```python
+     def infer(model, xb):
+         logits = model(xb)
+         pred = logits.argmax(dim=-1)
+         return {"pred": pred, "logits": logits}
+     ```
+
+10. 实现一个实验记录器，保存超参、指标和随机种子。
+   - 参考答案：
+     ```python
+     import json
+     from pathlib import Path
+     
+     def save_run(path, cfg, metrics, seed):
+         payload = {"cfg": cfg, "metrics": metrics, "seed": seed}
+         Path(path).write_text(json.dumps(payload, ensure_ascii=False, indent=2))
+     ```
+
+
+<!-- AUTO_INTERVIEW_QA_END -->
+

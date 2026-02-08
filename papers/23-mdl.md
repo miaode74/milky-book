@@ -7,13 +7,13 @@
 
 **试图解决的核心问题**
 在统计推断和机器学习中，核心难题是如何在“拟合优度”（Goodness of Fit）与“模型复杂度”（Model Complexity）之间找到平衡，即**模型选择（Model Selection）**与**过拟合（Overfitting）**问题。
-[cite_start]传统的最大似然估计（Maximum Likelihood Estimation, ML）倾向于选择参数最多的模型以完美拟合训练数据，但往往导致对未来数据的预测能力极差（过拟合）[cite: 42]。虽然存在 AIC、BIC 等准则，但它们通常基于渐进假设或特定贝叶斯先验，缺乏统一的非统计依赖基础。
+传统的最大似然估计（Maximum Likelihood Estimation, ML）倾向于选择参数最多的模型以完美拟合训练数据，但往往导致对未来数据的预测能力极差（过拟合）。虽然存在 AIC、BIC 等准则，但它们通常基于渐进假设或特定贝叶斯先验，缺乏统一的非统计依赖基础。
 
 **论文的主要贡献**
 Peter D. Grünwald 在本书（特别是第一章）中系统性地阐述了 MDL 原则：
-1.  [cite_start]**统一理论框架**：建立了一个基于**信息论**（Information Theory）和**柯尔莫哥洛夫复杂性**（Kolmogorov Complexity）的通用归纳推断框架，将学习视为寻找数据中的规律（Regularity）[cite: 41, 42]。
-2.  [cite_start]**重新定义目标**：提出推断的目标不是寻找所谓的“真实模型”（True Model），而是寻找对数据最有效的“描述”或“压缩”[cite: 526]。
-3.  [cite_start]**连接理论与实践**：从不可计算的“理想 MDL”（基于柯尔莫哥洛夫复杂性）过渡到可计算的“粗糙 MDL”（Crude MDL，两部分编码）和“精细 MDL”（Refined MDL，通用编码/随机复杂性），为神经网络架构搜索、多项式阶数选择等实际问题提供了可操作的数学准则[cite: 42, 910]。
+1.  **统一理论框架**：建立了一个基于**信息论**（Information Theory）和**柯尔莫哥洛夫复杂性**（Kolmogorov Complexity）的通用归纳推断框架，将学习视为寻找数据中的规律（Regularity）。
+2.  **重新定义目标**：提出推断的目标不是寻找所谓的“真实模型”（True Model），而是寻找对数据最有效的“描述”或“压缩”。
+3.  **连接理论与实践**：从不可计算的“理想 MDL”（基于柯尔莫哥洛夫复杂性）过渡到可计算的“粗糙 MDL”（Crude MDL，两部分编码）和“精细 MDL”（Refined MDL，通用编码/随机复杂性），为神经网络架构搜索、多项式阶数选择等实际问题提供了可操作的数学准则。
 
 ## 3. Introduction: 论文的动机是什么？
 
@@ -21,44 +21,44 @@ Peter D. Grünwald 在本书（特别是第一章）中系统性地阐述了 MDL
 论文开篇通过一个直观的二进制序列例子引出了 MDL 的核心直觉：
 * 序列 A (00010001...) 是高度重复的，可以用很短的程序描述；
 * 序列 B (01110100...) 是随机抛硬币产生的，几乎无法被压缩；
-* [cite_start]序列 C (0s 是 1s 的四倍) 介于两者之间，存在统计规律[cite: 711-726]。
-[cite_start]**动机一**：任何数据中的“规律”都可以被利用来“压缩”数据。如果我们能比仅仅逐字记录数据更短地描述它，说明我们捕捉到了数据背后的某种机制。因此，**压缩程度等同于理解程度（Learning = Compression）**[cite: 728]。
+* 序列 C (0s 是 1s 的四倍) 介于两者之间，存在统计规律。
+**动机一**：任何数据中的“规律”都可以被利用来“压缩”数据。如果我们能比仅仅逐字记录数据更短地描述它，说明我们捕捉到了数据背后的某种机制。因此，**压缩程度等同于理解程度（Learning = Compression）**。
 
 **动机二：形式化奥卡姆剃刀**
-[cite_start]在科学发现中，我们倾向于选择“如无必要，勿增实体”的简单解释。MDL 将这一哲学原则转化为可计算的数学公式。不同于传统统计学假设存在一个“真实参数”，MDL 认为无论数据背后是否有真实模型，我们都应该寻找那个能使“假设的描述长度 + 数据在假设下的描述长度”最小化的解释[cite: 552, 562]。
+在科学发现中，我们倾向于选择“如无必要，勿增实体”的简单解释。MDL 将这一哲学原则转化为可计算的数学公式。不同于传统统计学假设存在一个“真实参数”，MDL 认为无论数据背后是否有真实模型，我们都应该寻找那个能使“假设的描述长度 + 数据在假设下的描述长度”最小化的解释。
 
 **动机三：自动防御过拟合**
-[cite_start]当我们使用复杂模型（如高阶多项式）时，虽然数据拟合误差极小（描述残差的编码长度短），但描述模型参数所需的编码长度会非常长。反之，简单模型参数编码短，但残差编码长。MDL 通过最小化两者的总和，自动在欠拟合和过拟合之间找到最优折衷点，而无需像传统方法那样引入人为的惩罚项[cite: 554, 897]。
+当我们使用复杂模型（如高阶多项式）时，虽然数据拟合误差极小（描述残差的编码长度短），但描述模型参数所需的编码长度会非常长。反之，简单模型参数编码短，但残差编码长。MDL 通过最小化两者的总和，自动在欠拟合和过拟合之间找到最优折衷点，而无需像传统方法那样引入人为的惩罚项。
 
 ## 4. Method: 解决方案是什么？
 
 MDL 的核心方法论经历了从“理想”到“粗糙”再到“精细”的演变。
 
 ### 4.1 理想 MDL 与柯尔莫哥洛夫复杂性
-[cite_start]从理论源头看，Ray Solomonoff 提出使用通用图灵机的最短程序长度来度量复杂性，即**柯尔莫哥洛夫复杂性**（Kolmogorov Complexity）$K(D)$[cite: 813]。
+从理论源头看，Ray Solomonoff 提出使用通用图灵机的最短程序长度来度量复杂性，即**柯尔莫哥洛夫复杂性**（Kolmogorov Complexity）$K(D)$。
 * **定义**：数据 $D$ 的最短描述长度是能输出 $D$ 并停机的最短程序的长度。
-* [cite_start]**问题**：$K(D)$ 是不可计算的（Uncomputable），因此无法直接用于实际模型选择[cite: 850]。
+* **问题**：$K(D)$ 是不可计算的（Uncomputable），因此无法直接用于实际模型选择。
 
 ### 4.2 粗糙 MDL（Crude MDL / Two-Part Code）
-[cite_start]为了实际应用，Rissanen 提出了“两部分编码”准则，这是工程中最常用的形式[cite: 910]。
+为了实际应用，Rissanen 提出了“两部分编码”准则，这是工程中最常用的形式。
 对于给定的模型类 $\mathcal{H}$（如多项式集合）和数据 $D$，我们要选择一个点假设 $H \in \mathcal{H}$ 来最小化总描述长度 $L(D)$：
 
 $$L(D) = \min_{H \in \mathcal{H}} \{ L(H) + L(D|H) \}$$
 
-* [cite_start]**$L(H)$（模型描述长度）**：描述假设本身所需的比特数。这对应于模型的“复杂度”。例如，描述一个 $k$ 阶多项式需要编码 $k+1$ 个系数。参数越多或精度越高，$L(H)$ 越大[cite: 912]。
-* [cite_start]**$L(D|H)$（数据描述长度）**：在已知假设 $H$ 的情况下，描述数据的代价。根据香农信息论，这等价于负对数似然（Negative Log-Likelihood）：$L(D|H) = -\log_2 P(D|H)$。模型拟合越好，概率 $P(D|H)$ 越大，编码长度越短[cite: 913, 956]。
+* **$L(H)$（模型描述长度）**：描述假设本身所需的比特数。这对应于模型的“复杂度”。例如，描述一个 $k$ 阶多项式需要编码 $k+1$ 个系数。参数越多或精度越高，$L(H)$ 越大。
+* **$L(D|H)$（数据描述长度）**：在已知假设 $H$ 的情况下，描述数据的代价。根据香农信息论，这等价于负对数似然（Negative Log-Likelihood）：$L(D|H) = -\log_2 P(D|H)$。模型拟合越好，概率 $P(D|H)$ 越大，编码长度越短。
 
 > **关键洞察**：MDL 并不是选择拟合误差最小的模型，而是选择“误差 + 复杂度”之和最小的模型。
 
 ### 4.3 精细 MDL（Refined MDL / Stochastic Complexity）
-[cite_start]粗糙 MDL 存在一个缺陷：$L(H)$ 的计算依赖于人为定义的参数编码方式（例如，参数保留多少位精度？）。为了解决这个问题，精细 MDL 引入了**通用编码（Universal Coding）**和**随机复杂性（Stochastic Complexity）**的概念[cite: 981]。
+粗糙 MDL 存在一个缺陷：$L(H)$ 的计算依赖于人为定义的参数编码方式（例如，参数保留多少位精度？）。为了解决这个问题，精细 MDL 引入了**通用编码（Universal Coding）**和**随机复杂性（Stochastic Complexity）**的概念。
 
 精细 MDL 不再显式编码单个假设 $H$，而是设计一个针对整个模型类 $\mathcal{H}$ 的单部分编码 $\bar{L}(D|\mathcal{H})$。其中最著名的形式是**归一化最大似然（Normalized Maximum Likelihood, NML）**：
 
 $$\bar{L}_{NML}(D|\mathcal{H}) = -\log P(D|\hat{\theta}(D)) + \log \sum_{x^n} P(x^n|\hat{\theta}(x^n))$$
 
 * 第一项是最大似然估计的拟合度。
-* [cite_start]第二项是**参数复杂性（Parametric Complexity）**，它衡量了模型类 $\mathcal{H}$ 对所有可能数据的拟合能力的“总和”。这个项仅与模型结构有关，与具体数据无关，是比参数计数更本质的复杂度度量[cite: 1000, 1006]。
+* 第二项是**参数复杂性（Parametric Complexity）**，它衡量了模型类 $\mathcal{H}$ 对所有可能数据的拟合能力的“总和”。这个项仅与模型结构有关，与具体数据无关，是比参数计数更本质的复杂度度量。
 
 ### 4.4 逻辑流程图
 
@@ -86,10 +86,10 @@ graph TD
 
 ### 5.1 主实验：多项式回归的模型选择
 
-* **任务**：给定一组带噪声的  数据点，确定拟合数据的多项式最佳阶数（Degree）。
+* **任务**：给定一组带噪声的 `N` 个数据点，确定拟合数据的多项式最佳阶数（Degree）。
 * **设置**：
-* 模型 1：线性模型（欠拟合），无法捕捉数据曲线， 很大， 很小。
-* 模型 2：高阶多项式（过拟合），穿过所有数据点，，但  极大（因为需要编码大量参数及其高精度）。
+* 模型 1：线性模型（欠拟合），无法捕捉数据曲线，`L_data` 很大，`L_model` 很小。
+* 模型 2：高阶多项式（过拟合），虽然训练误差很低，但 `L_model` 极大（因为需要编码大量参数及其高精度）。
 * 模型 3：适中阶数（最佳）。
 
 
@@ -119,15 +119,15 @@ graph TD
 本节代码对应论文中 **Crude MDL (Two-Part Code)** 在 **神经网络架构选择 (Neural Network Architecture Selection)** 场景下的实现（参考 Numpy 代码 Section 4）。
 
 **对应逻辑**：
-MDL 计算公式：。
+MDL 计算公式：`L_{MDL} = L_{model} + L_{data}`。
 
-* ****：利用费雪信息矩阵近似（Fisher Information Approximation），参数编码长度约为 ，其中  是参数数量， 是样本量。
-* ****：对应数据的负对数似然（Negative Log-Likelihood）。对于分类任务，这等价于交叉熵损失（Cross Entropy Loss，单位为 nats）转换为比特（bits）。
+* **`L_{model}`**：利用费雪信息矩阵近似（Fisher Information Approximation），参数编码长度可近似写作 `0.5 * k * log_2(N)`，其中 `k` 是参数数量，`N` 是样本量。
+* **`L_{data}`**：对应数据负对数似然（Negative Log-Likelihood）。对于分类任务，这等价于交叉熵损失（单位 nats）再转换为比特（bits）。
 
 **数据张量说明**：
 
-* **输入 `X**`: 形状 `(N, input_dim)`，假设已归一化。
-* **标签 `y**`: 形状 `(N,)`，类别索引。
+* **输入 `X`**: 形状 `(N, input_dim)`，假设已归一化。
+* **标签 `y`**: 形状 `(N,)`，类别索引。
 * **假设**: 演示代码使用简单的全连接网络。Numpy 版本使用随机搜索进行简单训练；Torch 版本将实现一个标准的基于梯度的优化步骤以展示更高效的实现，但在计算 MDL 指标时保持逻辑严格一致。
 
 ### 6.2 代码对照
@@ -332,7 +332,7 @@ def mdl_neural_network_torch(X, y, hidden_dim, device='cpu'):
 3. **单位转换 (Nats vs Bits)**
 * **关键点**: 信息论中标准的 MDL 通常以 **比特 (Bits)** 为单位。
 * **Numpy**: 代码显式执行了 `loss * N / np.log(2)`。
-* **Torch**: PyTorch 的损失函数默认基于自然对数 ()，单位是 **nats**。为了与 MDL 公式对齐，必须除以  (即 `np.log(2)` 或 `math.log(2)`) 将其转换为比特。这点在实现时极易被忽略。
+* **Torch**: PyTorch 的损失函数默认基于自然对数 `ln`，单位是 **nats**。为了与 MDL 公式对齐，必须除以 `ln 2`（即 `np.log(2)` 或 `math.log(2)`）将其转换为比特。这点在实现时极易被忽略。
 
 
 4. **训练逻辑**
@@ -342,3 +342,207 @@ def mdl_neural_network_torch(X, y, hidden_dim, device='cpu'):
 
 
 ```
+
+<!-- AUTO_PDF_IMAGES_START -->
+
+## 论文原图（PDF）
+> 下图自动抽取自原论文 PDF，用于补充概念、结构和实验细节。
+> 来源：`23.pdf`
+
+![MDL Principle 图 1](/paper-figures/23/img-000.png)
+*图 1：建议结合本节 `最小描述长度` 一起阅读。*
+
+<!-- AUTO_PDF_IMAGES_END -->
+
+<!-- AUTO_INTERVIEW_QA_START -->
+
+## 面试题与答案
+> 主题：**MDL Principle**（围绕 `最小描述长度`）
+
+### 一、选择题（10题）
+
+1. 在 MDL Principle 中，最关键的建模目标是什么？
+   - A. 最小描述长度
+   - B. 两部编码
+   - C. 模型复杂度
+   - D. 负对数似然
+   - **答案：A**
+
+2. 下列哪一项最直接对应 MDL Principle 的核心机制？
+   - A. 两部编码
+   - B. 模型复杂度
+   - C. 负对数似然
+   - D. 压缩
+   - **答案：B**
+
+3. 在复现 MDL Principle 时，优先要保证哪项一致性？
+   - A. 只看最终分数
+   - B. 只看训练集表现
+   - C. 实现与论文设置对齐
+   - D. 忽略随机种子
+   - **答案：C**
+
+4. 对于 MDL Principle，哪个指标最能反映方法有效性？
+   - A. 主指标与分组指标
+   - B. 只看单次结果
+   - C. 只看速度
+   - D. 只看参数量
+   - **答案：A**
+
+5. 当 MDL Principle 模型出现效果退化时，首要检查项是什么？
+   - A. 数据与标签管线
+   - B. 先增大模型十倍
+   - C. 随机改损失函数
+   - D. 删除验证集
+   - **答案：A**
+
+6. MDL Principle 与传统 baseline 的主要差异通常体现在？
+   - A. 归纳偏置与结构设计
+   - B. 仅参数更多
+   - C. 仅训练更久
+   - D. 仅学习率更小
+   - **答案：A**
+
+7. 若要提升 MDL Principle 的泛化能力，最稳妥的做法是？
+   - A. 正则化+消融验证
+   - B. 只堆数据不复核
+   - C. 关闭评估脚本
+   - D. 取消对照组
+   - **答案：A**
+
+8. 关于 MDL Principle 的实验设计，下列说法更合理的是？
+   - A. 固定变量做可复现实验
+   - B. 同时改十个超参
+   - C. 只展示最好一次
+   - D. 省略失败实验
+   - **答案：A**
+
+9. 在工程部署中，MDL Principle 的常见风险是？
+   - A. 数值稳定与漂移
+   - B. 只关心GPU利用率
+   - C. 日志越少越好
+   - D. 不做回归测试
+   - **答案：A**
+
+10. 回到论文主张，MDL Principle 最不应该被误解为？
+   - A. 可替代所有任务
+   - B. 有明确适用边界
+   - C. 不需要数据质量
+   - D. 不需要误差分析
+   - **答案：B**
+
+
+### 二、代码题（10题，含参考答案）
+
+1. 实现一个最小可运行的数据预处理函数，输出可用于 MDL Principle 训练的批次。
+   - 参考答案：
+     ```python
+     import numpy as np
+     
+     def make_batch(x, y, batch_size=32):
+         idx = np.random.choice(len(x), batch_size, replace=False)
+         return x[idx], y[idx]
+     ```
+
+2. 实现 MDL Principle 的核心前向步骤（简化版），并返回中间张量。
+   - 参考答案：
+     ```python
+     import numpy as np
+     
+     def forward_core(x, w, b):
+         z = x @ w + b
+         h = np.tanh(z)
+         return h, {"z": z, "h": h}
+     ```
+
+3. 写一个训练 step：前向、loss、反向、更新。
+   - 参考答案：
+     ```python
+     def train_step(model, optimizer, criterion, xb, yb):
+         optimizer.zero_grad()
+         pred = model(xb)
+         loss = criterion(pred, yb)
+         loss.backward()
+         optimizer.step()
+         return float(loss.item())
+     ```
+
+4. 实现一个评估函数，返回主指标与一个辅助指标。
+   - 参考答案：
+     ```python
+     import numpy as np
+     
+     def evaluate(y_true, y_pred):
+         acc = (y_true == y_pred).mean()
+         err = 1.0 - acc
+         return {"acc": float(acc), "err": float(err)}
+     ```
+
+5. 实现梯度裁剪与学习率调度的训练循环（简化版）。
+   - 参考答案：
+     ```python
+     import torch
+     
+     def train_loop(model, loader, optimizer, criterion, scheduler=None, clip=1.0):
+         model.train()
+         for xb, yb in loader:
+             optimizer.zero_grad()
+             loss = criterion(model(xb), yb)
+             loss.backward()
+             torch.nn.utils.clip_grad_norm_(model.parameters(), clip)
+             optimizer.step()
+             if scheduler is not None:
+                 scheduler.step()
+     ```
+
+6. 实现 ablation 开关：可切换是否启用 `两部编码`。
+   - 参考答案：
+     ```python
+     def forward_with_ablation(x, module, use_feature=True):
+         if use_feature:
+             return module(x)
+         return x
+     ```
+
+7. 实现一个鲁棒的数值稳定 softmax / logsumexp 工具函数。
+   - 参考答案：
+     ```python
+     import numpy as np
+     
+     def stable_softmax(x, axis=-1):
+         x = x - np.max(x, axis=axis, keepdims=True)
+         ex = np.exp(x)
+         return ex / np.sum(ex, axis=axis, keepdims=True)
+     ```
+
+8. 写一个小型单元测试，验证 `模型复杂度` 相关张量形状正确。
+   - 参考答案：
+     ```python
+     def test_shape(out, expected_last_dim):
+         assert out.ndim >= 2
+         assert out.shape[-1] == expected_last_dim
+     ```
+
+9. 实现模型推理包装器，支持 batch 输入并返回结构化结果。
+   - 参考答案：
+     ```python
+     def infer(model, xb):
+         logits = model(xb)
+         pred = logits.argmax(dim=-1)
+         return {"pred": pred, "logits": logits}
+     ```
+
+10. 实现一个实验记录器，保存超参、指标和随机种子。
+   - 参考答案：
+     ```python
+     import json
+     from pathlib import Path
+     
+     def save_run(path, cfg, metrics, seed):
+         payload = {"cfg": cfg, "metrics": metrics, "seed": seed}
+         Path(path).write_text(json.dumps(payload, ensure_ascii=False, indent=2))
+     ```
+
+
+<!-- AUTO_INTERVIEW_QA_END -->
+

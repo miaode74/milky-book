@@ -7,34 +7,34 @@ DPR 是一篇开放域问答（Open-Domain QA）的里程碑式论文，它证�
 
 ## 2. Abstract: 论文试图解决什么问题？
 
-[cite_start]在开放域问答任务中，系统需要从海量文档（如 Wikipedia）中检索出包含答案的段落。长期以来，基于关键词匹配的稀疏向量模型（如 TF-IDF 或 BM25）是事实上的标准方法 [cite: 7]。尽管深度学习在阅读理解（Reader）阶段取得了巨大进展，但检索（Retriever）阶段依然依赖传统算法。
+在开放域问答任务中，系统需要从海量文档（如 Wikipedia）中检索出包含答案的段落。长期以来，基于关键词匹配的稀疏向量模型（如 TF-IDF 或 BM25）是事实上的标准方法 。尽管深度学习在阅读理解（Reader）阶段取得了巨大进展，但检索（Retriever）阶段依然依赖传统算法。
 
-[cite_start]**论文试图解决的核心矛盾是**：传统稀疏检索无法捕捉语义信息（例如同义词匹配），而之前的稠密检索（Dense Retrieval）方法通常被认为需要大量的标注数据或极复杂的预训练任务（如 Inverse Cloze Task, ICT）才能生效 [cite: 26]。
+**论文试图解决的核心矛盾是**：传统稀疏检索无法捕捉语义信息（例如同义词匹配），而之前的稠密检索（Dense Retrieval）方法通常被认为需要大量的标注数据或极复杂的预训练任务（如 Inverse Cloze Task, ICT）才能生效 。
 
 **本文的主要贡献**：
-1.  [cite_start]提出了一种简单的稠密检索框架（DPR），利用 BERT 双塔结构学习问题和段落的嵌入表示 [cite: 8]。
-2.  [cite_start]证明了只要训练策略得当（特别是利用 **In-batch Negatives**），仅使用有限的问题-段落对（Question-Passage pairs）就能训练出高质量的检索器 [cite: 35]。
-3.  [cite_start]在多个开放域 QA 数据集（Natural Questions, TriviaQA 等）上，DPR 的 Top-20 检索准确率比强大的 Lucene-BM25 系统高出 **9%-19%** [cite: 9]。
-4.  [cite_start]将 DPR 与阅读器结合，在多个 benchmark 上刷新了 End-to-End QA 的 State-of-the-Art (SOTA) [cite: 9]。
+1.  提出了一种简单的稠密检索框架（DPR），利用 BERT 双塔结构学习问题和段落的嵌入表示 。
+2.  证明了只要训练策略得当（特别是利用 **In-batch Negatives**），仅使用有限的问题-段落对（Question-Passage pairs）就能训练出高质量的检索器 。
+3.  在多个开放域 QA 数据集（Natural Questions, TriviaQA 等）上，DPR 的 Top-20 检索准确率比强大的 Lucene-BM25 系统高出 **9%-19%** 。
+4.  将 DPR 与阅读器结合，在多个 benchmark 上刷新了 End-to-End QA 的 State-of-the-Art (SOTA) 。
 
 ---
 
 ## 3. Introduction: 动机与背景梳理
 
 ### 3.1 开放域 QA 的两阶段范式
-[cite_start]现代开放域 QA 系统通常遵循 **Retriever-Reader** 的两阶段流程 [cite: 12]：
+现代开放域 QA 系统通常遵循 **Retriever-Reader** 的两阶段流程 ：
 1.  **Retriever**：从数百万个文档中筛选出几十个可能包含答案的候选段落（Subset）。
 2.  **Reader**：对这几十个段落进行精细阅读，抽取具体答案。
 
-[cite_start]虽然将问题简化为阅读理解是合理的，但如果在检索阶段就漏掉了包含答案的段落，后续的 Reader 再强大也无济于事 [cite: 13][cite_start]。例如，在 SQuAD v1.1 上，如果检索不准确，Exact Match 分数会从 >80% 掉到 <40% [cite: 17]。
+虽然将问题简化为阅读理解是合理的，但如果在检索阶段就漏掉了包含答案的段落，后续的 Reader 再强大也无济于事 。例如，在 SQuAD v1.1 上，如果检索不准确，Exact Match 分数会从 >80% 掉到 <40% 。
 
 ### 3.2 稀疏检索 vs. 稠密检索
-* **稀疏检索 (BM25)**：基于倒排索引和关键词匹配。它的优势是效率高，但无法理解语义。例如，问题 "Who is the bad guy in lord of the rings?" [cite_start]对应答案包含 "villain Sauron"。BM25 很难匹配 "bad guy" 和 "villain"，而稠密向量可以通过语义接近度解决这个问题 [cite: 21, 22]。
-* [cite_start]**稠密检索 (Dense)**：将问题和段落映射到低维连续空间。此前的方法（如 ORQA）认为单纯的有监督训练不够，必须引入复杂的 ICT 预训练 [cite: 26]。
+* **稀疏检索 (BM25)**：基于倒排索引和关键词匹配。它的优势是效率高，但无法理解语义。例如，问题 "Who is the bad guy in lord of the rings?" 对应答案包含 "villain Sauron"。BM25 很难匹配 "bad guy" 和 "villain"，而稠密向量可以通过语义接近度解决这个问题 。
+* **稠密检索 (Dense)**：将问题和段落映射到低维连续空间。此前的方法（如 ORQA）认为单纯的有监督训练不够，必须引入复杂的 ICT 预训练 。
 
 ### 3.3 DPR 的破局思路
-[cite_start]作者提出一个核心反问：**能否仅使用问题和段落对，不进行额外的预训练，就训练出一个更好的稠密检索模型？** [cite: 31]
-[cite_start]答案是肯定的。通过利用预训练的 BERT 和一种特定的训练机制——**最大化问题与相关段落点积的 Batch 训练**，DPR 证明了额外的复杂预训练可能是不必要的 [cite: 36][cite_start]。实验表明，在 Natural Questions 数据集上，DPR 的 Top-5 准确率达到 65.2%，而 BM25 仅为 42.9% [cite: 34]。
+作者提出一个核心反问：**能否仅使用问题和段落对，不进行额外的预训练，就训练出一个更好的稠密检索模型？** 
+答案是肯定的。通过利用预训练的 BERT 和一种特定的训练机制——**最大化问题与相关段落点积的 Batch 训练**，DPR 证明了额外的复杂预训练可能是不必要的 。实验表明，在 Natural Questions 数据集上，DPR 的 Top-5 准确率达到 65.2%，而 BM25 仅为 42.9% 。
 
 ---
 
@@ -43,38 +43,38 @@ DPR 是一篇开放域问答（Open-Domain QA）的里程碑式论文，它证�
 DPR 的核心是一个基于 Transformer 的双塔模型（Dual-Encoder），配合高效的负采样训练策略。
 
 ### 4.1 模型架构 (Dual-Encoder)
-[cite_start]DPR 使用两个独立的 BERT 网络（base, uncased）分别作为**问题编码器** $E_Q(\cdot)$ 和**段落编码器** $E_P(\cdot)$ [cite: 55, 69]。
+DPR 使用两个独立的 BERT 网络（base, uncased）分别作为**问题编码器** $E_Q(\cdot)$ 和**段落编码器** $E_P(\cdot)$ 。
 * 输入：文本序列。
-* [cite_start]输出：使用 `[CLS]` token 的输出作为该文本的 $d$ 维稠密向量表示（$d=768$）[cite: 69]。
+* 输出：使用 `[CLS]` token 的输出作为该文本的 $d$ 维稠密向量表示（$d=768$）。
 
 相似度计算采用简单的**点积（Dot Product）**：
 $$sim(q, p) = E_Q(q)^T E_P(p)$$
-[cite_start][cite: 62]
 
-> [cite_start]**解释**：虽然也可以使用余弦相似度或 L2 距离，但作者通过消融实验发现，简单的点积配合可学习的编码器效果最好且计算最高效（便于利用现有的 MIPS 索引工具如 FAISS）[cite: 68]。
+
+> **解释**：虽然也可以使用余弦相似度或 L2 距离，但作者通过消融实验发现，简单的点积配合可学习的编码器效果最好且计算最高效（便于利用现有的 MIPS 索引工具如 FAISS）。
 
 ### 4.2 训练目标 (Metric Learning)
-[cite_start]训练的核心是一个 Metric Learning 问题：让相关（Positive）的问题-段落对在向量空间中距离更近，不相关（Negative）的更远 [cite: 74]。
+训练的核心是一个 Metric Learning 问题：让相关（Positive）的问题-段落对在向量空间中距离更近，不相关（Negative）的更远 。
 
 假设训练集包含 $m$ 个样本，每个样本由 1 个问题 $q_i$、1 个正样本段落 $p_i^+$ 和 $n$ 个负样本段落 $p_{i,j}^-$ 组成。优化目标是最小化正样本的负对数似然（NLL）：
 
 $$L(q_i, p_i^+, p_{i,1}^-, \dots, p_{i,n}^-) = -\log \frac{e^{sim(q_i, p_i^+)}}{e^{sim(q_i, p_i^+)} + \sum_{j=1}^n e^{sim(q_i, p_{i,j}^-)}}$$
-[cite_start][cite: 80]
+
 
 > **解释**：这本质上是一个 Softmax 交叉熵损失。对于每个问题 $q_i$，模型需要从 $1+n$ 个候选项中“分类”出正确的那个正样本段落。
 
 ### 4.3 负采样策略 (In-batch Negatives)
-[cite_start]这是 DPR 成功的关键。在检索任务中，正样本是明确的，但负样本池（全量文档库）极其庞大。如何选择负样本至关重要 [cite: 84]。
+这是 DPR 成功的关键。在检索任务中，正样本是明确的，但负样本池（全量文档库）极其庞大。如何选择负样本至关重要 。
 
-[cite_start]DPR 采用了 **In-batch Negatives** 策略 [cite: 95]：
+DPR 采用了 **In-batch Negatives** 策略 ：
 假设一个 Batch 有 $B$ 个问题，每个问题对应一个正样本段落。于是我们有 $B$ 个 Question 向量和 $B$ 个 Passage 向量。
 * 对于问题 $q_i$，与其配对的 $p_i$ 是正样本。
 * **同一个 Batch 内的其他 $B-1$ 个段落 $p_j (j \neq i)$ 自动被视为负样本。**
 
 **优势**：
-1.  [cite_start]**计算效率极高**：不需要重新编码负样本。计算一个 $B \times B$ 的相似度矩阵，就可以同时为 $B$ 个问题提供训练信号 [cite: 97]。
+1.  **计算效率极高**：不需要重新编码负样本。计算一个 $B \times B$ 的相似度矩阵，就可以同时为 $B$ 个问题提供训练信号 。
 2.  **样本数量**：有效训练对数量变成了 $B^2$（包含负对）。
-3.  [cite_start]**Gold Negatives 补充**：除了 In-batch 负样本，作者还发现为每个问题额外增加一个 **BM25 检索出的“困难负样本”（Hard Negative）**（即包含关键词但不包含答案的段落）能进一步提升效果 [cite: 92]。
+3.  **Gold Negatives 补充**：除了 In-batch 负样本，作者还发现为每个问题额外增加一个 **BM25 检索出的“困难负样本”（Hard Negative）**（即包含关键词但不包含答案的段落）能进一步提升效果 。
 
 ```mermaid
 graph TD
@@ -401,3 +401,207 @@ print(f"Batch Loss: {loss.item():.4f}")
 
 
 ```
+
+<!-- AUTO_PDF_IMAGES_START -->
+
+## 论文原图（PDF）
+> 下图自动抽取自原论文 PDF，用于补充概念、结构和实验细节。
+> 来源：`28.pdf`
+
+![DPR 图 1](/paper-figures/28/page-1.png)
+*图 1：建议结合本节 `稠密向量检索` 一起阅读。*
+
+<!-- AUTO_PDF_IMAGES_END -->
+
+<!-- AUTO_INTERVIEW_QA_START -->
+
+## 面试题与答案
+> 主题：**DPR**（围绕 `稠密向量检索`）
+
+### 一、选择题（10题）
+
+1. 在 DPR 中，最关键的建模目标是什么？
+   - A. 稠密向量检索
+   - B. dual encoder
+   - C. in-batch negatives
+   - D. top-k
+   - **答案：A**
+
+2. 下列哪一项最直接对应 DPR 的核心机制？
+   - A. dual encoder
+   - B. in-batch negatives
+   - C. top-k
+   - D. BM25
+   - **答案：B**
+
+3. 在复现 DPR 时，优先要保证哪项一致性？
+   - A. 只看最终分数
+   - B. 只看训练集表现
+   - C. 实现与论文设置对齐
+   - D. 忽略随机种子
+   - **答案：C**
+
+4. 对于 DPR，哪个指标最能反映方法有效性？
+   - A. 主指标与分组指标
+   - B. 只看单次结果
+   - C. 只看速度
+   - D. 只看参数量
+   - **答案：A**
+
+5. 当 DPR 模型出现效果退化时，首要检查项是什么？
+   - A. 数据与标签管线
+   - B. 先增大模型十倍
+   - C. 随机改损失函数
+   - D. 删除验证集
+   - **答案：A**
+
+6. DPR 与传统 baseline 的主要差异通常体现在？
+   - A. 归纳偏置与结构设计
+   - B. 仅参数更多
+   - C. 仅训练更久
+   - D. 仅学习率更小
+   - **答案：A**
+
+7. 若要提升 DPR 的泛化能力，最稳妥的做法是？
+   - A. 正则化+消融验证
+   - B. 只堆数据不复核
+   - C. 关闭评估脚本
+   - D. 取消对照组
+   - **答案：A**
+
+8. 关于 DPR 的实验设计，下列说法更合理的是？
+   - A. 固定变量做可复现实验
+   - B. 同时改十个超参
+   - C. 只展示最好一次
+   - D. 省略失败实验
+   - **答案：A**
+
+9. 在工程部署中，DPR 的常见风险是？
+   - A. 数值稳定与漂移
+   - B. 只关心GPU利用率
+   - C. 日志越少越好
+   - D. 不做回归测试
+   - **答案：A**
+
+10. 回到论文主张，DPR 最不应该被误解为？
+   - A. 可替代所有任务
+   - B. 有明确适用边界
+   - C. 不需要数据质量
+   - D. 不需要误差分析
+   - **答案：B**
+
+
+### 二、代码题（10题，含参考答案）
+
+1. 实现一个最小可运行的数据预处理函数，输出可用于 DPR 训练的批次。
+   - 参考答案：
+     ```python
+     import numpy as np
+     
+     def make_batch(x, y, batch_size=32):
+         idx = np.random.choice(len(x), batch_size, replace=False)
+         return x[idx], y[idx]
+     ```
+
+2. 实现 DPR 的核心前向步骤（简化版），并返回中间张量。
+   - 参考答案：
+     ```python
+     import numpy as np
+     
+     def forward_core(x, w, b):
+         z = x @ w + b
+         h = np.tanh(z)
+         return h, {"z": z, "h": h}
+     ```
+
+3. 写一个训练 step：前向、loss、反向、更新。
+   - 参考答案：
+     ```python
+     def train_step(model, optimizer, criterion, xb, yb):
+         optimizer.zero_grad()
+         pred = model(xb)
+         loss = criterion(pred, yb)
+         loss.backward()
+         optimizer.step()
+         return float(loss.item())
+     ```
+
+4. 实现一个评估函数，返回主指标与一个辅助指标。
+   - 参考答案：
+     ```python
+     import numpy as np
+     
+     def evaluate(y_true, y_pred):
+         acc = (y_true == y_pred).mean()
+         err = 1.0 - acc
+         return {"acc": float(acc), "err": float(err)}
+     ```
+
+5. 实现梯度裁剪与学习率调度的训练循环（简化版）。
+   - 参考答案：
+     ```python
+     import torch
+     
+     def train_loop(model, loader, optimizer, criterion, scheduler=None, clip=1.0):
+         model.train()
+         for xb, yb in loader:
+             optimizer.zero_grad()
+             loss = criterion(model(xb), yb)
+             loss.backward()
+             torch.nn.utils.clip_grad_norm_(model.parameters(), clip)
+             optimizer.step()
+             if scheduler is not None:
+                 scheduler.step()
+     ```
+
+6. 实现 ablation 开关：可切换是否启用 `dual encoder`。
+   - 参考答案：
+     ```python
+     def forward_with_ablation(x, module, use_feature=True):
+         if use_feature:
+             return module(x)
+         return x
+     ```
+
+7. 实现一个鲁棒的数值稳定 softmax / logsumexp 工具函数。
+   - 参考答案：
+     ```python
+     import numpy as np
+     
+     def stable_softmax(x, axis=-1):
+         x = x - np.max(x, axis=axis, keepdims=True)
+         ex = np.exp(x)
+         return ex / np.sum(ex, axis=axis, keepdims=True)
+     ```
+
+8. 写一个小型单元测试，验证 `in-batch negatives` 相关张量形状正确。
+   - 参考答案：
+     ```python
+     def test_shape(out, expected_last_dim):
+         assert out.ndim >= 2
+         assert out.shape[-1] == expected_last_dim
+     ```
+
+9. 实现模型推理包装器，支持 batch 输入并返回结构化结果。
+   - 参考答案：
+     ```python
+     def infer(model, xb):
+         logits = model(xb)
+         pred = logits.argmax(dim=-1)
+         return {"pred": pred, "logits": logits}
+     ```
+
+10. 实现一个实验记录器，保存超参、指标和随机种子。
+   - 参考答案：
+     ```python
+     import json
+     from pathlib import Path
+     
+     def save_run(path, cfg, metrics, seed):
+         payload = {"cfg": cfg, "metrics": metrics, "seed": seed}
+         Path(path).write_text(json.dumps(payload, ensure_ascii=False, indent=2))
+     ```
+
+
+<!-- AUTO_INTERVIEW_QA_END -->
+

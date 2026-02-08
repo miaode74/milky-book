@@ -4,26 +4,26 @@
 这篇论文是对长短期记忆网络（LSTM）的系统性教程，它通过统一符号体系和修正历史文献中的错误，详细推导了 LSTM 如何通过**恒定误差这一核心机制（CEC）**解决循环神经网络（RNN）中的梯度消失问题，是理解 LSTM 底层数学原理的绝佳资料。
 
 ## 2. Abstract: 论文试图解决什么问题？有什么贡献？
-* [cite_start]**解决的问题**：标准的 RNN 虽然是动态分类器，但在处理时间序列时，误差信号（Error Signal）会随着时间步的增加呈指数级衰减或爆炸（Vanishing/Exploding Gradient），导致网络无法学习超过 10 个时间步的依赖关系 [cite: 37, 38]。
+* **解决的问题**：标准的 RNN 虽然是动态分类器，但在处理时间序列时，误差信号（Error Signal）会随着时间步的增加呈指数级衰减或爆炸（Vanishing/Exploding Gradient），导致网络无法学习超过 10 个时间步的依赖关系 。
 * **核心贡献**：
-    * [cite_start]**统一符号与修正错误**：作者指出早期 LSTM 论文（如 Hochreiter 1997, Graves 2005）使用了不同的符号系统，且后续文献积累了不少推导错误。本文提供了一套标准化的数学符号 [cite: 16, 17]。
-    * [cite_start]**详尽的梯度推导**：文章详细展示了 LSTM 前向传播和反向传播（BPTT 与 RTRL 混合方法）的完整数学推导过程，这在现代高度封装的框架文档中往往被省略 [cite: 15]。
+    * **统一符号与修正错误**：作者指出早期 LSTM 论文（如 Hochreiter 1997, Graves 2005）使用了不同的符号系统，且后续文献积累了不少推导错误。本文提供了一套标准化的数学符号 。
+    * **详尽的梯度推导**：文章详细展示了 LSTM 前向传播和反向传播（BPTT 与 RTRL 混合方法）的完整数学推导过程，这在现代高度封装的框架文档中往往被省略 。
 
 ## 3. Introduction: 论文的动机是什么？
 故事逻辑非常清晰，从最基础的神经元一路推演到 LSTM：
 
-1.  [cite_start]**静态分类器的局限**：感知机（Perceptron）和前馈神经网络（FFNN）只能进行静态映射，无法处理具有时间维度的任务 [cite: 33]。
-2.  [cite_start]**动态记忆的需求**：为了处理序列，Elman 和 Jordan 网络引入了“上下文单元（Context Cells）”将上一时刻的隐藏层输出回传给当前时刻，形成了 RNN [cite: 36, 46]。
-3.  [cite_start]**RNN 的致命缺陷**：理论分析表明，RNN 的误差梯度包含一个连乘项 $W^t$。当 $t$ 很大时，如果权重 $|W|<1$ 则梯度消失，如果 $|W|>1$ 则梯度爆炸。这使得标准 RNN 实际上无法捕捉长距离依赖 [cite: 38, 481]。
-4.  [cite_start]**LSTM 的诞生**：Hochreiter 和 Schmidhuber 提出了一种通过**门控机制**保护内部状态不受干扰的结构，强制误差流在特定单元内保持恒定，从而解决了上述问题 [cite: 39]。
+1.  **静态分类器的局限**：感知机（Perceptron）和前馈神经网络（FFNN）只能进行静态映射，无法处理具有时间维度的任务 。
+2.  **动态记忆的需求**：为了处理序列，Elman 和 Jordan 网络引入了“上下文单元（Context Cells）”将上一时刻的隐藏层输出回传给当前时刻，形成了 RNN 。
+3.  **RNN 的致命缺陷**：理论分析表明，RNN 的误差梯度包含一个连乘项 $W^t$。当 $t$ 很大时，如果权重 $|W|<1$ 则梯度消失，如果 $|W|>1$ 则梯度爆炸。这使得标准 RNN 实际上无法捕捉长距离依赖 。
+4.  **LSTM 的诞生**：Hochreiter 和 Schmidhuber 提出了一种通过**门控机制**保护内部状态不受干扰的结构，强制误差流在特定单元内保持恒定，从而解决了上述问题 。
 
 ## 4. Method: 解决方案是什么？
 
 ### 4.1 核心机制：恒定误差旋转木马 (CEC)
 LSTM 的灵魂在于**记忆块（Memory Block）**中的核心单元。为了防止误差消失，论文推导出一个关键结论：
-> [cite_start]"From Equations 22 and 23 we see that, in order to ensure a constant error flow through u, we need to have $f'_u(z_u) W_{uu} = 1.0$" [cite: 519-520]
+> "From Equations 22 and 23 we see that, in order to ensure a constant error flow through u, we need to have $f'_u(z_u) W_{uu} = 1.0$" 
 
-[cite_start]这意味着激活函数必须是线性的（$f(x)=x$），且自连接权重必须为 1.0。这种结构被称为 **CEC (Constant Error Carousel)**，它允许梯度在没有任何衰减的情况下流过无限的时间步 [cite: 528]。
+这意味着激活函数必须是线性的（$f(x)=x$），且自连接权重必须为 1.0。这种结构被称为 **CEC (Constant Error Carousel)**，它允许梯度在没有任何衰减的情况下流过无限的时间步 。
 
 ### 4.2 门控机制 (Gates)
 单纯的 CEC 极其不稳定，因为任何输入都会无休止地累加。LSTM 引入了三个乘法门来控制信息流：
@@ -31,15 +31,15 @@ LSTM 的灵魂在于**记忆块（Memory Block）**中的核心单元。为了�
 1.  **输入门 (Input Gate, $y_{in}$)**：决定何时允许新信息 $g(z)$ 进入 CEC。
     $$s_{m_c}(t+1) = s_{m_c}(t) + y_{in}(t+1) \cdot g(z_{m_c}(t+1))$$
     *(注：这是无遗忘门的原始版本，对应论文公式 30)*
-2.  [cite_start]**输出门 (Output Gate, $y_{out}$)**：决定何时让 CEC 中的记忆影响网络的其他部分 [cite: 544]。
+2.  **输出门 (Output Gate, $y_{out}$)**：决定何时让 CEC 中的记忆影响网络的其他部分 。
     $$y_{m_c}(t+1) = y_{out}(t+1) \cdot h(s_{m_c}(t+1))$$
-3.  [cite_start]**遗忘门 (Forget Gate, $y_{\phi}$)**：由 Gers 在 2000 年补充。为了防止 CEC 内部状态无限增长导致饱和，遗忘门允许网络学会“重置”记忆 [cite: 656]。
+3.  **遗忘门 (Forget Gate, $y_{\phi}$)**：由 Gers 在 2000 年补充。为了防止 CEC 内部状态无限增长导致饱和，遗忘门允许网络学会“重置”记忆 。
     $$s_{m_c}(t+1) = s_{m_c}(t) \cdot y_{\phi}(t+1) + y_{in}(t+1) \cdot g(z_{m_c}(t+1))$$
 
 ### 4.3 训练算法
 论文提到了一种早期的**混合学习方法**：
 * **BPTT (Backpropagation Through Time)**：用于训练输出层和隐藏层之间的连接。
-* [cite_start]**RTRL (Real-Time Recurrent Learning)**：用于训练 LSTM 单元内部的门控连接，因为这部分需要处理局部梯度截断（Truncated Gradient）以防止计算爆炸 [cite: 548]。
+* **RTRL (Real-Time Recurrent Learning)**：用于训练 LSTM 单元内部的门控连接，因为这部分需要处理局部梯度截断（Truncated Gradient）以防止计算爆炸 。
 
 ```mermaid
 graph LR
@@ -99,7 +99,7 @@ graph LR
 **手写识别**：在在线手写识别任务中，LSTM 展示了处理未分割序列数据的能力 。
 
 
-* **梯度消失分析**：论文在第 7 节详细分析了梯度流，指出如果局部误差梯度小于 1，误差会指数级消失。LSTM 通过强制  使得误差流在 CEC 中保持恒定，从而在实验中验证了对长序列的鲁棒性。
+* **梯度消失分析**：论文在第 7 节详细分析了梯度流，指出如果局部误差梯度小于 1，误差会指数级消失。LSTM 通过 CEC（Constant Error Carousel）中的近恒等路径（理想化时可写作 `∂c_t/∂c_{t-1}≈1`）缓解该问题，从而在实验中展现出对长序列的鲁棒性。
 
 ---
 
@@ -469,4 +469,207 @@ print(f"Model output values: {output.flatten()[:5]}")
 
 
 ```
+
+<!-- AUTO_PDF_IMAGES_START -->
+
+## 论文原图（PDF）
+> 下图自动抽取自原论文 PDF，用于补充概念、结构和实验细节。
+> 来源：`03 understand lstm.pdf`
+
+![LSTM 图 1](/paper-figures/03/img-000.png)
+*图 1：建议结合本节 `门控记忆机制` 一起阅读。*
+
+<!-- AUTO_PDF_IMAGES_END -->
+
+<!-- AUTO_INTERVIEW_QA_START -->
+
+## 面试题与答案
+> 主题：**LSTM**（围绕 `门控记忆机制`）
+
+### 一、选择题（10题）
+
+1. 在 LSTM 中，最关键的建模目标是什么？
+   - A. 门控记忆机制
+   - B. 输入门
+   - C. 遗忘门
+   - D. 输出门
+   - **答案：A**
+
+2. 下列哪一项最直接对应 LSTM 的核心机制？
+   - A. 输入门
+   - B. 遗忘门
+   - C. 输出门
+   - D. 细胞状态
+   - **答案：B**
+
+3. 在复现 LSTM 时，优先要保证哪项一致性？
+   - A. 只看最终分数
+   - B. 只看训练集表现
+   - C. 实现与论文设置对齐
+   - D. 忽略随机种子
+   - **答案：C**
+
+4. 对于 LSTM，哪个指标最能反映方法有效性？
+   - A. 主指标与分组指标
+   - B. 只看单次结果
+   - C. 只看速度
+   - D. 只看参数量
+   - **答案：A**
+
+5. 当 LSTM 模型出现效果退化时，首要检查项是什么？
+   - A. 数据与标签管线
+   - B. 先增大模型十倍
+   - C. 随机改损失函数
+   - D. 删除验证集
+   - **答案：A**
+
+6. LSTM 与传统 baseline 的主要差异通常体现在？
+   - A. 归纳偏置与结构设计
+   - B. 仅参数更多
+   - C. 仅训练更久
+   - D. 仅学习率更小
+   - **答案：A**
+
+7. 若要提升 LSTM 的泛化能力，最稳妥的做法是？
+   - A. 正则化+消融验证
+   - B. 只堆数据不复核
+   - C. 关闭评估脚本
+   - D. 取消对照组
+   - **答案：A**
+
+8. 关于 LSTM 的实验设计，下列说法更合理的是？
+   - A. 固定变量做可复现实验
+   - B. 同时改十个超参
+   - C. 只展示最好一次
+   - D. 省略失败实验
+   - **答案：A**
+
+9. 在工程部署中，LSTM 的常见风险是？
+   - A. 数值稳定与漂移
+   - B. 只关心GPU利用率
+   - C. 日志越少越好
+   - D. 不做回归测试
+   - **答案：A**
+
+10. 回到论文主张，LSTM 最不应该被误解为？
+   - A. 可替代所有任务
+   - B. 有明确适用边界
+   - C. 不需要数据质量
+   - D. 不需要误差分析
+   - **答案：B**
+
+
+### 二、代码题（10题，含参考答案）
+
+1. 实现一个最小可运行的数据预处理函数，输出可用于 LSTM 训练的批次。
+   - 参考答案：
+     ```python
+     import numpy as np
+     
+     def make_batch(x, y, batch_size=32):
+         idx = np.random.choice(len(x), batch_size, replace=False)
+         return x[idx], y[idx]
+     ```
+
+2. 实现 LSTM 的核心前向步骤（简化版），并返回中间张量。
+   - 参考答案：
+     ```python
+     import numpy as np
+     
+     def forward_core(x, w, b):
+         z = x @ w + b
+         h = np.tanh(z)
+         return h, {"z": z, "h": h}
+     ```
+
+3. 写一个训练 step：前向、loss、反向、更新。
+   - 参考答案：
+     ```python
+     def train_step(model, optimizer, criterion, xb, yb):
+         optimizer.zero_grad()
+         pred = model(xb)
+         loss = criterion(pred, yb)
+         loss.backward()
+         optimizer.step()
+         return float(loss.item())
+     ```
+
+4. 实现一个评估函数，返回主指标与一个辅助指标。
+   - 参考答案：
+     ```python
+     import numpy as np
+     
+     def evaluate(y_true, y_pred):
+         acc = (y_true == y_pred).mean()
+         err = 1.0 - acc
+         return {"acc": float(acc), "err": float(err)}
+     ```
+
+5. 实现梯度裁剪与学习率调度的训练循环（简化版）。
+   - 参考答案：
+     ```python
+     import torch
+     
+     def train_loop(model, loader, optimizer, criterion, scheduler=None, clip=1.0):
+         model.train()
+         for xb, yb in loader:
+             optimizer.zero_grad()
+             loss = criterion(model(xb), yb)
+             loss.backward()
+             torch.nn.utils.clip_grad_norm_(model.parameters(), clip)
+             optimizer.step()
+             if scheduler is not None:
+                 scheduler.step()
+     ```
+
+6. 实现 ablation 开关：可切换是否启用 `输入门`。
+   - 参考答案：
+     ```python
+     def forward_with_ablation(x, module, use_feature=True):
+         if use_feature:
+             return module(x)
+         return x
+     ```
+
+7. 实现一个鲁棒的数值稳定 softmax / logsumexp 工具函数。
+   - 参考答案：
+     ```python
+     import numpy as np
+     
+     def stable_softmax(x, axis=-1):
+         x = x - np.max(x, axis=axis, keepdims=True)
+         ex = np.exp(x)
+         return ex / np.sum(ex, axis=axis, keepdims=True)
+     ```
+
+8. 写一个小型单元测试，验证 `遗忘门` 相关张量形状正确。
+   - 参考答案：
+     ```python
+     def test_shape(out, expected_last_dim):
+         assert out.ndim >= 2
+         assert out.shape[-1] == expected_last_dim
+     ```
+
+9. 实现模型推理包装器，支持 batch 输入并返回结构化结果。
+   - 参考答案：
+     ```python
+     def infer(model, xb):
+         logits = model(xb)
+         pred = logits.argmax(dim=-1)
+         return {"pred": pred, "logits": logits}
+     ```
+
+10. 实现一个实验记录器，保存超参、指标和随机种子。
+   - 参考答案：
+     ```python
+     import json
+     from pathlib import Path
+     
+     def save_run(path, cfg, metrics, seed):
+         payload = {"cfg": cfg, "metrics": metrics, "seed": seed}
+         Path(path).write_text(json.dumps(payload, ensure_ascii=False, indent=2))
+     ```
+
+
+<!-- AUTO_INTERVIEW_QA_END -->
 

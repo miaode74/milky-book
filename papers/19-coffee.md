@@ -11,18 +11,18 @@
 2.  **模型验证**：设计了一个模拟咖啡与奶油混合的二维元胞自动机（Cellular Automaton）。
 3.  **理论与实验结合**：分析证明了无相互作用粒子模型不会产生高复杂性，而相互作用模型（Interacting Model）则会复现出“复杂性先升后降”的现象。
 
-> [cite_start]"In contrast to entropy, which increases monotonically, the 'complexity'... seems intuitively to increase at first and then decrease..." [cite: 8]
+> "In contrast to entropy, which increases monotonically, the 'complexity'... seems intuitively to increase at first and then decrease..." 
 
 ## 3. Introduction: 论文的动机是什么？
 故事的逻辑始于对热力学与信息论之间张力的思考。
 
 * **熵的单调性 vs. 结构的涌现**：
     当我们把奶油倒入咖啡，最初是分层的（有序，低熵），最终是均匀混合的（无序，高熵）。这两种状态描述起来都很简单（“全白在全黑上”或“均匀灰色”）。但在中间过程中，会出现复杂的漩涡和卷须结构，这才是最难描述的时刻。
-    > [cite_start]"Thus, it appears that the coffee cup system starts out at a state of low complexity, and that the complexity first increases and then decreases over time." [cite: 34]
+    > "Thus, it appears that the coffee cup system starts out at a state of low complexity, and that the complexity first increases and then decreases over time." 
 
 * **定义的困境**：
     传统的熵定义（Boltzmann, Gibbs, Shannon）无法区分“随机”与“复杂”。随机序列（如抛硬币结果）具有最高熵和最高的柯尔莫哥洛夫复杂性，但在物理直觉上它并不“复杂”（因为它毫无结构）。
-    > [cite_start]"Boltzmann entropy, Shannon entropy, and Kolmogorov complexity are all maximized by 'random' or 'generic' objects..." [cite: 77]
+    > "Boltzmann entropy, Shannon entropy, and Kolmogorov complexity are all maximized by 'random' or 'generic' objects..." 
 
 * **寻找合适的度量**：
     论文回顾了 **Sophistication**（复杂性深度）、**Logical Depth**（逻辑深度）和 **Light-Cone Complexity**（光锥复杂性）。最终，作者选择了一种更易于计算且符合物理观测直觉的方法：**Apparent Complexity**（表观复杂性）。
@@ -34,7 +34,7 @@
 系统是一个 $N \times N$ 的网格，状态包含咖啡（0）和奶油（1）。初始状态为上半部分全是 1，下半部分全是 0。
 * **相互作用模型 (Interacting Model)**：
     每个格子只能容纳一个粒子。每一步随机交换相邻的异色粒子。这种排斥作用模拟了液体的不可压缩性。
-    > [cite_start]"This model is interacting in the sense that the presence of a particle in a cell prevents another particle from entering that cell." [cite: 256]
+    > "This model is interacting in the sense that the presence of a particle in a cell prevents another particle from entering that cell." 
 * **无相互作用模型 (Non-Interacting Model)**：
     粒子进行独立的随机游走，允许重叠。这仅用于理论对照。
 
@@ -43,11 +43,11 @@
 计算步骤如下：
 1.  **粗粒化 (Coarse-graining)**：将 $N \times N$ 的精细网格划分为 $g \times g$ 的小块，计算块内平均值。
 2.  **阈值化 (Thresholding)**：将平均值映射到离散的桶中（例如：全白、混合、全黑）。
-    > [cite_start]"...we define 'nearby' cells as those within a $g \times g$ square centered at the cell in question." [cite: 310]
+    > "...we define 'nearby' cells as those within a $g \times g$ square centered at the cell in question." 
 3.  **压缩近似**：
     * **熵 ($S$)** $\approx$ 原始精细网格（Fine-grained）经 gzip 压缩后的大小。
     * **复杂性 ($C$)** $\approx$ 粗粒化并阈值化后的网格（Coarse-grained）经 gzip 压缩后的大小。
-    > [cite_start]"A plausible complexity measure is then the Kolmogorov complexity of a coarse-grained approximation of the automaton's state..." [cite: 12]
+    > "A plausible complexity measure is then the Kolmogorov complexity of a coarse-grained approximation of the automaton's state..." 
 
 ### 4.3 整体逻辑框图
 
@@ -326,3 +326,213 @@ def run_comparison():
 
 
 ```
+
+<!-- AUTO_PDF_IMAGES_START -->
+
+## 论文原图（PDF）
+> 下图自动抽取自原论文 PDF，用于补充概念、结构和实验细节。
+> 来源：`19.pdf`
+
+![Coffee Automaton 图 1](/paper-figures/19/img-000.png)
+*图 1：建议结合本节 `复杂性演化模拟` 一起阅读。*
+
+![Coffee Automaton 图 2](/paper-figures/19/img-001.png)
+*图 2：建议结合本节 `复杂性演化模拟` 一起阅读。*
+
+![Coffee Automaton 图 3](/paper-figures/19/img-014.png)
+*图 3：建议结合本节 `复杂性演化模拟` 一起阅读。*
+
+<!-- AUTO_PDF_IMAGES_END -->
+
+<!-- AUTO_INTERVIEW_QA_START -->
+
+## 面试题与答案
+> 主题：**Coffee Automaton**（围绕 `复杂性演化模拟`）
+
+### 一、选择题（10题）
+
+1. 在 Coffee Automaton 中，最关键的建模目标是什么？
+   - A. 复杂性演化模拟
+   - B. 可逆性
+   - C. 混合过程
+   - D. 熵
+   - **答案：A**
+
+2. 下列哪一项最直接对应 Coffee Automaton 的核心机制？
+   - A. 可逆性
+   - B. 混合过程
+   - C. 熵
+   - D. 峰值复杂性
+   - **答案：B**
+
+3. 在复现 Coffee Automaton 时，优先要保证哪项一致性？
+   - A. 只看最终分数
+   - B. 只看训练集表现
+   - C. 实现与论文设置对齐
+   - D. 忽略随机种子
+   - **答案：C**
+
+4. 对于 Coffee Automaton，哪个指标最能反映方法有效性？
+   - A. 主指标与分组指标
+   - B. 只看单次结果
+   - C. 只看速度
+   - D. 只看参数量
+   - **答案：A**
+
+5. 当 Coffee Automaton 模型出现效果退化时，首要检查项是什么？
+   - A. 数据与标签管线
+   - B. 先增大模型十倍
+   - C. 随机改损失函数
+   - D. 删除验证集
+   - **答案：A**
+
+6. Coffee Automaton 与传统 baseline 的主要差异通常体现在？
+   - A. 归纳偏置与结构设计
+   - B. 仅参数更多
+   - C. 仅训练更久
+   - D. 仅学习率更小
+   - **答案：A**
+
+7. 若要提升 Coffee Automaton 的泛化能力，最稳妥的做法是？
+   - A. 正则化+消融验证
+   - B. 只堆数据不复核
+   - C. 关闭评估脚本
+   - D. 取消对照组
+   - **答案：A**
+
+8. 关于 Coffee Automaton 的实验设计，下列说法更合理的是？
+   - A. 固定变量做可复现实验
+   - B. 同时改十个超参
+   - C. 只展示最好一次
+   - D. 省略失败实验
+   - **答案：A**
+
+9. 在工程部署中，Coffee Automaton 的常见风险是？
+   - A. 数值稳定与漂移
+   - B. 只关心GPU利用率
+   - C. 日志越少越好
+   - D. 不做回归测试
+   - **答案：A**
+
+10. 回到论文主张，Coffee Automaton 最不应该被误解为？
+   - A. 可替代所有任务
+   - B. 有明确适用边界
+   - C. 不需要数据质量
+   - D. 不需要误差分析
+   - **答案：B**
+
+
+### 二、代码题（10题，含参考答案）
+
+1. 实现一个最小可运行的数据预处理函数，输出可用于 Coffee Automaton 训练的批次。
+   - 参考答案：
+     ```python
+     import numpy as np
+     
+     def make_batch(x, y, batch_size=32):
+         idx = np.random.choice(len(x), batch_size, replace=False)
+         return x[idx], y[idx]
+     ```
+
+2. 实现 Coffee Automaton 的核心前向步骤（简化版），并返回中间张量。
+   - 参考答案：
+     ```python
+     import numpy as np
+     
+     def forward_core(x, w, b):
+         z = x @ w + b
+         h = np.tanh(z)
+         return h, {"z": z, "h": h}
+     ```
+
+3. 写一个训练 step：前向、loss、反向、更新。
+   - 参考答案：
+     ```python
+     def train_step(model, optimizer, criterion, xb, yb):
+         optimizer.zero_grad()
+         pred = model(xb)
+         loss = criterion(pred, yb)
+         loss.backward()
+         optimizer.step()
+         return float(loss.item())
+     ```
+
+4. 实现一个评估函数，返回主指标与一个辅助指标。
+   - 参考答案：
+     ```python
+     import numpy as np
+     
+     def evaluate(y_true, y_pred):
+         acc = (y_true == y_pred).mean()
+         err = 1.0 - acc
+         return {"acc": float(acc), "err": float(err)}
+     ```
+
+5. 实现梯度裁剪与学习率调度的训练循环（简化版）。
+   - 参考答案：
+     ```python
+     import torch
+     
+     def train_loop(model, loader, optimizer, criterion, scheduler=None, clip=1.0):
+         model.train()
+         for xb, yb in loader:
+             optimizer.zero_grad()
+             loss = criterion(model(xb), yb)
+             loss.backward()
+             torch.nn.utils.clip_grad_norm_(model.parameters(), clip)
+             optimizer.step()
+             if scheduler is not None:
+                 scheduler.step()
+     ```
+
+6. 实现 ablation 开关：可切换是否启用 `可逆性`。
+   - 参考答案：
+     ```python
+     def forward_with_ablation(x, module, use_feature=True):
+         if use_feature:
+             return module(x)
+         return x
+     ```
+
+7. 实现一个鲁棒的数值稳定 softmax / logsumexp 工具函数。
+   - 参考答案：
+     ```python
+     import numpy as np
+     
+     def stable_softmax(x, axis=-1):
+         x = x - np.max(x, axis=axis, keepdims=True)
+         ex = np.exp(x)
+         return ex / np.sum(ex, axis=axis, keepdims=True)
+     ```
+
+8. 写一个小型单元测试，验证 `混合过程` 相关张量形状正确。
+   - 参考答案：
+     ```python
+     def test_shape(out, expected_last_dim):
+         assert out.ndim >= 2
+         assert out.shape[-1] == expected_last_dim
+     ```
+
+9. 实现模型推理包装器，支持 batch 输入并返回结构化结果。
+   - 参考答案：
+     ```python
+     def infer(model, xb):
+         logits = model(xb)
+         pred = logits.argmax(dim=-1)
+         return {"pred": pred, "logits": logits}
+     ```
+
+10. 实现一个实验记录器，保存超参、指标和随机种子。
+   - 参考答案：
+     ```python
+     import json
+     from pathlib import Path
+     
+     def save_run(path, cfg, metrics, seed):
+         payload = {"cfg": cfg, "metrics": metrics, "seed": seed}
+         Path(path).write_text(json.dumps(payload, ensure_ascii=False, indent=2))
+     ```
+
+
+<!-- AUTO_INTERVIEW_QA_END -->
+

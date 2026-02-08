@@ -20,7 +20,7 @@
 
 
 3. 
-**理论直觉**：论文解释了这种方法为何有效——它避免了噪声在时间维度上的指数级放大，使得信息流只被干扰有限次（ 次，其中  为层数），而不是随着序列长度  累积 。
+**理论直觉**：论文解释了这种方法为何有效：它避免了噪声在时间维度上的指数级放大，使信息流只被干扰有限次（约 `L` 次，其中 `L` 为层数），而不是随着序列长度 `T` 累积。
 
 
 
@@ -83,21 +83,21 @@ graph LR
 对于一个标准的 LSTM 计算过程，我们将 Dropout 应用于线性变换之前的输入 （上一层输出）或 （输入），但不应用于循环输入 （同一层的上一时刻状态）。
 
 具体公式如下（以 LSTM 的四个门计算为例）：
-
-* 
-**引用说明**：公式源自论文 。
+$$[i_t,f_t,o_t,g_t] = [\sigma,\sigma,\sigma,\tanh]\big(W_x D(x_t) + W_h h_{t-1} + b\big)$$
+其中，Dropout 只作用在前馈输入 `x_t`（记作 `D(x_t)`），循环项 `h_{t-1}` 不做 Dropout。
+**引用说明**：对应论文对“non-recurrent connections”的约束。
 
 
 * **符号含义**：
-* ：来自上一层（或输入层）的激活值，经过了 **Dropout** 处理。
-* ：来自同一层上一时刻的隐藏状态，**未经 Dropout** 处理（直接连接）。
-* ：仿射变换（矩阵乘法+偏置）。
+* `D(x_t)`：来自上一层（或输入层）的激活值，经过 **Dropout** 处理。
+* `h_{t-1}`：来自同一层上一时刻的隐藏状态，**未经 Dropout** 处理（直接连接）。
+* `W_x, W_h, b`：仿射变换参数（矩阵乘法+偏置）。
 
 
 
 ### 为什么这样做有效？
 
-论文指出，在这种设置下，信息从  时刻流向  时刻，只会经过  次 Dropout 算子的干扰（其中  是网络深度），而不是  次（时间步数）。这使得梯度和记忆能够安全地穿越长序列，而 Dropout 依然能强迫网络学习更鲁棒的中间层表示。
+论文指出，在这种设置下，信息从 `t` 时刻流向 `t+1` 时刻时，不会在循环边上反复穿过 Dropout。沿深度方向大约只受 `L` 次扰动（`L` 为层数），而不是沿时间方向受 `T` 次扰动（`T` 为序列长度）。这使梯度和记忆更容易穿越长序列，同时保留 Dropout 的正则化收益。
 
 ## 5. Experiment: 主实验与分析实验分别做了什么？结果如何？
 
@@ -155,7 +155,7 @@ graph LR
 这份 Numpy 代码实现了一个**简化的 Vanilla RNN**（注意：并非论文中的 LSTM，但原理通用），展示了三种情况：
 
 1. **Standard Dropout (Zaremba et al.)**：代码中的 `RNNWithDropout` 类。
-* 它在 `forward` 循环中，对每一步的输入  和输出之前的隐藏状态  调用 `dropout()`。
+* 它在 `forward` 循环中，对每一步的前馈输入 `x_t` 以及送入输出层前的隐藏状态 `h_t` 调用 `dropout()`。
 * **关键点**：由于 `dropout()` 函数内部每次调用 `np.random.rand`，这意味着**每个时间步生成的 Mask 都是不同的**。这符合 Zaremba 论文的原意（非循环连接上的噪声是独立同分布的）。
 * **形状假设**：输入 `inputs` 是一个列表，每个元素形状 `(input_size, 1)`（Batch size=1）。
 
@@ -483,7 +483,7 @@ if __name__ == "__main__":
 
 1. **Zaremba vs Variational 的核心区别**：
 * **Numpy `RNNWithDropout` (Zaremba)**：在 `for` 循环内部调用 `dropout(x)`。由于随机数生成器在每次调用时状态会改变，因此**时间步 T1 和 T2 的 Mask 是不一样的**。这虽然增加了噪声，但严格遵循了 Zaremba 论文中“非循环连接应当被正则化”的定义。
-* **Numpy `RNNWithVariationalDropout**`：在 `for` 循环**外部**预先生成 Mask。这意味着**时间步 T1 和 T2 使用完全相同的 Mask**（即总是丢弃第 k 个单元）。这能保持特征的连续性，在理论上更优（贝叶斯解释），但实现复杂度稍高。
+* **Numpy `RNNWithVariationalDropout`**：在 `for` 循环**外部**预先生成 Mask。这意味着**时间步 T1 和 T2 使用完全相同的 Mask**（即总是丢弃第 k 个单元）。这能保持特征连续性，在理论上更优（贝叶斯解释），但实现复杂度稍高。
 
 
 2. **Torch 实现细节**：
@@ -494,3 +494,207 @@ if __name__ == "__main__":
 3. **易错点提示**：
 * **训练/测试模式**：Numpy 代码通过 `training` 参数控制。Torch 通过 `model.train()` 和 `model.eval()` 控制 `nn.Dropout` 的行为。为了强行对齐 Numpy 的函数签名，我在 `forward` 中显式设置了 `self.train(training)`。
 * **循环连接的纯净性**：请注意在两个实现中，`h`（上一时刻状态）进入 `self.h2h(h)` 时是**没有**经过 Dropout 的。这是本论文最关键的工程细节。只有输出到下一层（或输出层）的 `h_dropped` 才被 Mask 干扰。
+
+<!-- AUTO_PDF_IMAGES_START -->
+
+## 论文原图（PDF）
+> 下图自动抽取自原论文 PDF，用于补充概念、结构和实验细节。
+> 来源：`04.pdf`
+
+![RNN Regularization 图 1](/paper-figures/04/img-000.png)
+*图 1：建议结合本节 `循环网络正则化` 一起阅读。*
+
+<!-- AUTO_PDF_IMAGES_END -->
+
+<!-- AUTO_INTERVIEW_QA_START -->
+
+## 面试题与答案
+> 主题：**RNN Regularization**（围绕 `循环网络正则化`）
+
+### 一、选择题（10题）
+
+1. 在 RNN Regularization 中，最关键的建模目标是什么？
+   - A. 循环网络正则化
+   - B. Dropout
+   - C. non-recurrent
+   - D. 泛化
+   - **答案：A**
+
+2. 下列哪一项最直接对应 RNN Regularization 的核心机制？
+   - A. Dropout
+   - B. non-recurrent
+   - C. 泛化
+   - D. 过拟合
+   - **答案：B**
+
+3. 在复现 RNN Regularization 时，优先要保证哪项一致性？
+   - A. 只看最终分数
+   - B. 只看训练集表现
+   - C. 实现与论文设置对齐
+   - D. 忽略随机种子
+   - **答案：C**
+
+4. 对于 RNN Regularization，哪个指标最能反映方法有效性？
+   - A. 主指标与分组指标
+   - B. 只看单次结果
+   - C. 只看速度
+   - D. 只看参数量
+   - **答案：A**
+
+5. 当 RNN Regularization 模型出现效果退化时，首要检查项是什么？
+   - A. 数据与标签管线
+   - B. 先增大模型十倍
+   - C. 随机改损失函数
+   - D. 删除验证集
+   - **答案：A**
+
+6. RNN Regularization 与传统 baseline 的主要差异通常体现在？
+   - A. 归纳偏置与结构设计
+   - B. 仅参数更多
+   - C. 仅训练更久
+   - D. 仅学习率更小
+   - **答案：A**
+
+7. 若要提升 RNN Regularization 的泛化能力，最稳妥的做法是？
+   - A. 正则化+消融验证
+   - B. 只堆数据不复核
+   - C. 关闭评估脚本
+   - D. 取消对照组
+   - **答案：A**
+
+8. 关于 RNN Regularization 的实验设计，下列说法更合理的是？
+   - A. 固定变量做可复现实验
+   - B. 同时改十个超参
+   - C. 只展示最好一次
+   - D. 省略失败实验
+   - **答案：A**
+
+9. 在工程部署中，RNN Regularization 的常见风险是？
+   - A. 数值稳定与漂移
+   - B. 只关心GPU利用率
+   - C. 日志越少越好
+   - D. 不做回归测试
+   - **答案：A**
+
+10. 回到论文主张，RNN Regularization 最不应该被误解为？
+   - A. 可替代所有任务
+   - B. 有明确适用边界
+   - C. 不需要数据质量
+   - D. 不需要误差分析
+   - **答案：B**
+
+
+### 二、代码题（10题，含参考答案）
+
+1. 实现一个最小可运行的数据预处理函数，输出可用于 RNN Regularization 训练的批次。
+   - 参考答案：
+     ```python
+     import numpy as np
+     
+     def make_batch(x, y, batch_size=32):
+         idx = np.random.choice(len(x), batch_size, replace=False)
+         return x[idx], y[idx]
+     ```
+
+2. 实现 RNN Regularization 的核心前向步骤（简化版），并返回中间张量。
+   - 参考答案：
+     ```python
+     import numpy as np
+     
+     def forward_core(x, w, b):
+         z = x @ w + b
+         h = np.tanh(z)
+         return h, {"z": z, "h": h}
+     ```
+
+3. 写一个训练 step：前向、loss、反向、更新。
+   - 参考答案：
+     ```python
+     def train_step(model, optimizer, criterion, xb, yb):
+         optimizer.zero_grad()
+         pred = model(xb)
+         loss = criterion(pred, yb)
+         loss.backward()
+         optimizer.step()
+         return float(loss.item())
+     ```
+
+4. 实现一个评估函数，返回主指标与一个辅助指标。
+   - 参考答案：
+     ```python
+     import numpy as np
+     
+     def evaluate(y_true, y_pred):
+         acc = (y_true == y_pred).mean()
+         err = 1.0 - acc
+         return {"acc": float(acc), "err": float(err)}
+     ```
+
+5. 实现梯度裁剪与学习率调度的训练循环（简化版）。
+   - 参考答案：
+     ```python
+     import torch
+     
+     def train_loop(model, loader, optimizer, criterion, scheduler=None, clip=1.0):
+         model.train()
+         for xb, yb in loader:
+             optimizer.zero_grad()
+             loss = criterion(model(xb), yb)
+             loss.backward()
+             torch.nn.utils.clip_grad_norm_(model.parameters(), clip)
+             optimizer.step()
+             if scheduler is not None:
+                 scheduler.step()
+     ```
+
+6. 实现 ablation 开关：可切换是否启用 `Dropout`。
+   - 参考答案：
+     ```python
+     def forward_with_ablation(x, module, use_feature=True):
+         if use_feature:
+             return module(x)
+         return x
+     ```
+
+7. 实现一个鲁棒的数值稳定 softmax / logsumexp 工具函数。
+   - 参考答案：
+     ```python
+     import numpy as np
+     
+     def stable_softmax(x, axis=-1):
+         x = x - np.max(x, axis=axis, keepdims=True)
+         ex = np.exp(x)
+         return ex / np.sum(ex, axis=axis, keepdims=True)
+     ```
+
+8. 写一个小型单元测试，验证 `non-recurrent` 相关张量形状正确。
+   - 参考答案：
+     ```python
+     def test_shape(out, expected_last_dim):
+         assert out.ndim >= 2
+         assert out.shape[-1] == expected_last_dim
+     ```
+
+9. 实现模型推理包装器，支持 batch 输入并返回结构化结果。
+   - 参考答案：
+     ```python
+     def infer(model, xb):
+         logits = model(xb)
+         pred = logits.argmax(dim=-1)
+         return {"pred": pred, "logits": logits}
+     ```
+
+10. 实现一个实验记录器，保存超参、指标和随机种子。
+   - 参考答案：
+     ```python
+     import json
+     from pathlib import Path
+     
+     def save_run(path, cfg, metrics, seed):
+         payload = {"cfg": cfg, "metrics": metrics, "seed": seed}
+         Path(path).write_text(json.dumps(payload, ensure_ascii=False, indent=2))
+     ```
+
+
+<!-- AUTO_INTERVIEW_QA_END -->
+

@@ -18,7 +18,7 @@ Meta AI 提出了一种将“预测下一个 token”扩展为“同时预测未
 
 ### 主要贡献
 
-1. **多 Token 预测架构**：提出了一种简单的架构修改，利用共享的主干网络（Trunk）和  个独立的输出头（Heads），同时预测未来的  个 token。
+1. **多 Token 预测架构**：提出了一种简单的架构修改，利用共享主干网络（Trunk）和 `k` 个独立输出头（Heads），同时预测未来 `k` 个 token。
 2. **性能提升**：在代码生成任务上表现尤为出色。
 > "Our 13B parameter models solves 12% more problems on HumanEval and 17% more on MBPP than comparable next-token models." 
 > 
@@ -36,7 +36,7 @@ Meta AI 提出了一种将“预测下一个 token”扩展为“同时预测未
 
 ### 动机：超越局部最优与短视
 
-传统的 Teacher Forcing 训练方式告诉模型每一个位置的“正确答案”，导致模型过于依赖当前上下文的表面统计规律，而缺乏长远的规划能力。作者认为，要求模型预测更远的未来（不仅仅是 ，而是 ），可以迫使模型的主干网络（Shared Trunk）学习到更深层、更全局的语义表征。
+传统的 Teacher Forcing 训练方式告诉模型每一个位置的“正确答案”，导致模型过于依赖当前上下文的表面统计规律，而缺乏长远规划能力。作者认为，要求模型预测更远未来（不仅仅是 `x_{t+1}`，而是 `x_{t+1:t+k}`），可以迫使共享主干学习更深层、更全局的语义表征。
 
 > "More precisely, teacher forcing with next-token prediction latches on local patterns and overlooks 'hard' decisions." 
 > 
@@ -57,15 +57,15 @@ Meta AI 提出了一种将“预测下一个 token”扩展为“同时预测未
 
 ### 核心架构：Shared Trunk + Independent Heads
 
-不同于简单的增加模型深度，作者提出在共享的主干网络（Shared Trunk）之上，并行使用  个独立的输出头。
+不同于简单地增加模型深度，作者提出在共享主干网络（Shared Trunk）之上，并行使用 `k` 个独立输出头。
 
-* **输入**：上下文序列 。
-* **共享主干**：，提取潜在表征。
-* **多头预测**：第  个头（）负责预测 。
+* **输入**：上下文序列 `x_{\le t}`。
+* **共享主干**：`h_t = Trunk_\theta(x_{\le t})`，提取潜在表征。
+* **多头预测**：第 `i` 个头 `Head_i` 负责预测 `x_{t+i}`。
 
 
 
-其中  是独立的 Transformer 层， 是共享的 unembedding 矩阵。
+其中 `Head_i` 是独立预测头，`W_U` 是共享的 unembedding 矩阵。
 
 ### 损失函数
 
@@ -78,9 +78,9 @@ Meta AI 提出了一种将“预测下一个 token”扩展为“同时预测未
 
 ### 关键工程优化：内存高效实现
 
-如果简单地并行计算所有头的 logits，显存占用会随着  线性增长（，其中  是词表大小）。作者设计了一种**顺序前向/后向（Sequential Forward/Backward）**策略：
+如果简单并行计算所有头的 logits，显存占用会随 `k` 线性增长（约 `O(kV)`，其中 `V` 是词表大小）。作者设计了**顺序前向/后向（Sequential Forward/Backward）**策略：
 
-1. 计算主干输出 。
+1. 计算主干输出 `h_t`。
 2. 依次计算 Head 1 的 Loss 和梯度，释放 Logits 显存。
 3. 依次计算 Head 2...Head 。
 4. 在主干处累积所有头的梯度。
@@ -168,7 +168,7 @@ graph LR
 * **假设与差异**：
 * **架构差异**：代码用的是 RNN (`tanh(Wx + Wh + b)`)，论文用的是 Transformer trunk。
 * **Batch 处理**：Numpy 代码是单样本循环（For-loop over sequence），PyTorch 实现将优化为 Batch 并行 + 序列向量化处理。
-* **损失计算**：Numpy 代码手动累加了未来  步的 Loss。
+* **损失计算**：Numpy 代码手动累加未来 `k` 步的 Loss。
 
 
 
@@ -342,5 +342,215 @@ def compute_multi_token_loss(model, input_seq):
 
 
 4. **易错点提示**：
-* **Loss 对齐**：在 Multi-token 预测中，第  个头在位置  预测的是 。在代码中对齐 `preds` 和 `targets` 时极易出错（Off-by-one error）。Torch 代码中演示了如何通过切片 `input_seq[:, i+1:]` 来自动对齐目标。
+* **Loss 对齐**：在 Multi-token 预测中，第 `i` 个头在位置 `t` 预测的是 `x_{t+i}`。对齐 `preds` 和 `targets` 时极易出现 Off-by-one 错误。Torch 代码中演示了通过切片 `input_seq[:, i+1:]` 自动对齐目标。
 * **Softmax 维度**：Numpy 代码需手动指定 `axis` 并处理 `keepdims`。PyTorch 的 `F.softmax` 或 `CrossEntropyLoss` 自动处理数值稳定性（Log-Sum-Exp trick），比 Numpy 手写 `np.exp` 更安全。
+
+<!-- AUTO_PDF_IMAGES_START -->
+
+## 论文原图（PDF）
+> 下图自动抽取自原论文 PDF，用于补充概念、结构和实验细节。
+> 来源：`27.pdf`
+
+![Multi-Token Prediction 图 1](/paper-figures/27/img-000.png)
+*图 1：建议结合本节 `多步预测训练` 一起阅读。*
+
+![Multi-Token Prediction 图 2](/paper-figures/27/img-001.png)
+*图 2：建议结合本节 `多步预测训练` 一起阅读。*
+
+![Multi-Token Prediction 图 3](/paper-figures/27/img-004.png)
+*图 3：建议结合本节 `多步预测训练` 一起阅读。*
+
+<!-- AUTO_PDF_IMAGES_END -->
+
+<!-- AUTO_INTERVIEW_QA_START -->
+
+## 面试题与答案
+> 主题：**Multi-Token Prediction**（围绕 `多步预测训练`）
+
+### 一、选择题（10题）
+
+1. 在 Multi-Token Prediction 中，最关键的建模目标是什么？
+   - A. 多步预测训练
+   - B. shared trunk
+   - C. multi-head
+   - D. long horizon
+   - **答案：A**
+
+2. 下列哪一项最直接对应 Multi-Token Prediction 的核心机制？
+   - A. shared trunk
+   - B. multi-head
+   - C. long horizon
+   - D. 代码生成
+   - **答案：B**
+
+3. 在复现 Multi-Token Prediction 时，优先要保证哪项一致性？
+   - A. 只看最终分数
+   - B. 只看训练集表现
+   - C. 实现与论文设置对齐
+   - D. 忽略随机种子
+   - **答案：C**
+
+4. 对于 Multi-Token Prediction，哪个指标最能反映方法有效性？
+   - A. 主指标与分组指标
+   - B. 只看单次结果
+   - C. 只看速度
+   - D. 只看参数量
+   - **答案：A**
+
+5. 当 Multi-Token Prediction 模型出现效果退化时，首要检查项是什么？
+   - A. 数据与标签管线
+   - B. 先增大模型十倍
+   - C. 随机改损失函数
+   - D. 删除验证集
+   - **答案：A**
+
+6. Multi-Token Prediction 与传统 baseline 的主要差异通常体现在？
+   - A. 归纳偏置与结构设计
+   - B. 仅参数更多
+   - C. 仅训练更久
+   - D. 仅学习率更小
+   - **答案：A**
+
+7. 若要提升 Multi-Token Prediction 的泛化能力，最稳妥的做法是？
+   - A. 正则化+消融验证
+   - B. 只堆数据不复核
+   - C. 关闭评估脚本
+   - D. 取消对照组
+   - **答案：A**
+
+8. 关于 Multi-Token Prediction 的实验设计，下列说法更合理的是？
+   - A. 固定变量做可复现实验
+   - B. 同时改十个超参
+   - C. 只展示最好一次
+   - D. 省略失败实验
+   - **答案：A**
+
+9. 在工程部署中，Multi-Token Prediction 的常见风险是？
+   - A. 数值稳定与漂移
+   - B. 只关心GPU利用率
+   - C. 日志越少越好
+   - D. 不做回归测试
+   - **答案：A**
+
+10. 回到论文主张，Multi-Token Prediction 最不应该被误解为？
+   - A. 可替代所有任务
+   - B. 有明确适用边界
+   - C. 不需要数据质量
+   - D. 不需要误差分析
+   - **答案：B**
+
+
+### 二、代码题（10题，含参考答案）
+
+1. 实现一个最小可运行的数据预处理函数，输出可用于 Multi-Token Prediction 训练的批次。
+   - 参考答案：
+     ```python
+     import numpy as np
+     
+     def make_batch(x, y, batch_size=32):
+         idx = np.random.choice(len(x), batch_size, replace=False)
+         return x[idx], y[idx]
+     ```
+
+2. 实现 Multi-Token Prediction 的核心前向步骤（简化版），并返回中间张量。
+   - 参考答案：
+     ```python
+     import numpy as np
+     
+     def forward_core(x, w, b):
+         z = x @ w + b
+         h = np.tanh(z)
+         return h, {"z": z, "h": h}
+     ```
+
+3. 写一个训练 step：前向、loss、反向、更新。
+   - 参考答案：
+     ```python
+     def train_step(model, optimizer, criterion, xb, yb):
+         optimizer.zero_grad()
+         pred = model(xb)
+         loss = criterion(pred, yb)
+         loss.backward()
+         optimizer.step()
+         return float(loss.item())
+     ```
+
+4. 实现一个评估函数，返回主指标与一个辅助指标。
+   - 参考答案：
+     ```python
+     import numpy as np
+     
+     def evaluate(y_true, y_pred):
+         acc = (y_true == y_pred).mean()
+         err = 1.0 - acc
+         return {"acc": float(acc), "err": float(err)}
+     ```
+
+5. 实现梯度裁剪与学习率调度的训练循环（简化版）。
+   - 参考答案：
+     ```python
+     import torch
+     
+     def train_loop(model, loader, optimizer, criterion, scheduler=None, clip=1.0):
+         model.train()
+         for xb, yb in loader:
+             optimizer.zero_grad()
+             loss = criterion(model(xb), yb)
+             loss.backward()
+             torch.nn.utils.clip_grad_norm_(model.parameters(), clip)
+             optimizer.step()
+             if scheduler is not None:
+                 scheduler.step()
+     ```
+
+6. 实现 ablation 开关：可切换是否启用 `shared trunk`。
+   - 参考答案：
+     ```python
+     def forward_with_ablation(x, module, use_feature=True):
+         if use_feature:
+             return module(x)
+         return x
+     ```
+
+7. 实现一个鲁棒的数值稳定 softmax / logsumexp 工具函数。
+   - 参考答案：
+     ```python
+     import numpy as np
+     
+     def stable_softmax(x, axis=-1):
+         x = x - np.max(x, axis=axis, keepdims=True)
+         ex = np.exp(x)
+         return ex / np.sum(ex, axis=axis, keepdims=True)
+     ```
+
+8. 写一个小型单元测试，验证 `multi-head` 相关张量形状正确。
+   - 参考答案：
+     ```python
+     def test_shape(out, expected_last_dim):
+         assert out.ndim >= 2
+         assert out.shape[-1] == expected_last_dim
+     ```
+
+9. 实现模型推理包装器，支持 batch 输入并返回结构化结果。
+   - 参考答案：
+     ```python
+     def infer(model, xb):
+         logits = model(xb)
+         pred = logits.argmax(dim=-1)
+         return {"pred": pred, "logits": logits}
+     ```
+
+10. 实现一个实验记录器，保存超参、指标和随机种子。
+   - 参考答案：
+     ```python
+     import json
+     from pathlib import Path
+     
+     def save_run(path, cfg, metrics, seed):
+         payload = {"cfg": cfg, "metrics": metrics, "seed": seed}
+         Path(path).write_text(json.dumps(payload, ensure_ascii=False, indent=2))
+     ```
+
+
+<!-- AUTO_INTERVIEW_QA_END -->
+

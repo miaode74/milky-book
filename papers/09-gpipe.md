@@ -5,49 +5,49 @@ GPipe 是谷歌提出的一种**流水线并行（Pipeline Parallelism）**库�
 
 ## 2. Abstract: 论文试图解决什么问题？有什么贡献？
 **试图解决的问题**：
-[cite_start]在深度学习中，扩大模型容量（Capacity）是提升质量的有效手段 [cite: 18][cite_start]。然而，单个加速器（GPU/TPU）的显存限制了模型的大小 [cite: 19][cite_start]。传统的模型并行（Model Parallelism）方案通常难以设计，且针对特定架构（architecture-specific），缺乏通用性和灵活性 [cite: 20]。
+在深度学习中，扩大模型容量（Capacity）是提升质量的有效手段 。然而，单个加速器（GPU/TPU）的显存限制了模型的大小 。传统的模型并行（Model Parallelism）方案通常难以设计，且针对特定架构（architecture-specific），缺乏通用性和灵活性 。
 
 **主要贡献**：
-1.  [cite_start]**GPipe 库**：提出了一种通用的流水线并行库，可以将任何由层序列组成的网络扩展到巨大规模 [cite: 21]。
-2.  [cite_start]**核心算法**：利用微批处理（batch-splitting）和重计算技术，大幅减少气泡（Idle time）和显存占用，实现了随设备数量增加的近乎线性加速 [cite: 23]。
+1.  **GPipe 库**：提出了一种通用的流水线并行库，可以将任何由层序列组成的网络扩展到巨大规模 。
+2.  **核心算法**：利用微批处理（batch-splitting）和重计算技术，大幅减少气泡（Idle time）和显存占用，实现了随设备数量增加的近乎线性加速 。
 3.  **实验验证**：
-    * [cite_start]**图像分类**：训练了 5.57 亿参数的 **AmoebaNet**，在 ImageNet-2012 上达到了 84.4% 的 top-1 准确率 [cite: 24]。
-    * [cite_start]**机器翻译**：训练了 60 亿参数的 **Transformer**（128 层），在多语言翻译任务上超越了所有双语模型 [cite: 24]。
+    * **图像分类**：训练了 5.57 亿参数的 **AmoebaNet**，在 ImageNet-2012 上达到了 84.4% 的 top-1 准确率 。
+    * **机器翻译**：训练了 60 亿参数的 **Transformer**（128 层），在多语言翻译任务上超越了所有双语模型 。
 
 ## 3. Introduction: 论文的动机是什么？请仔细梳理整个故事逻辑
 **动机（Motivation）**：
-[cite_start]深度学习的进步在很大程度上归功于模型容量的扩大，这在图像分类（ImageNet）和 NLP 领域都得到了验证（如 Figure 1 所示）[cite: 27, 28][cite_start]。然而，硬件限制（内存和通信带宽）迫使研究者必须将模型分割到不同设备上 [cite: 30][cite_start]。现有的模型并行算法极其复杂，需要在容量、灵活性和效率之间做艰难权衡，且往往不可移植 [cite: 72]。
+深度学习的进步在很大程度上归功于模型容量的扩大，这在图像分类（ImageNet）和 NLP 领域都得到了验证（如 Figure 1 所示）。然而，硬件限制（内存和通信带宽）迫使研究者必须将模型分割到不同设备上 。现有的模型并行算法极其复杂，需要在容量、灵活性和效率之间做艰难权衡，且往往不可移植 。
 
 **故事逻辑**：
-1.  [cite_start]**需求**：随着应用场景增加，迫切需要一种可靠、灵活的基础设施来轻松扩展各种神经网络 [cite: 74]。
+1.  **需求**：随着应用场景增加，迫切需要一种可靠、灵活的基础设施来轻松扩展各种神经网络 。
 2.  **GPipe 方案**：
-    * [cite_start]将模型视为层的序列（sequence of layers），将其划分为多个单元（cells）放置在不同加速器上 [cite: 77]。
-    * [cite_start]**流水线化（Pipelining）**：将一个 mini-batch 切分为更小的 micro-batches，使不同设备能同时处理不同的 micro-batch，从而并行工作 [cite: 79]。
-    * [cite_start]**同步更新**：采用同步梯度下降，保证了无论分区数量如何，梯度的更新逻辑在数学上是一致的 [cite: 80, 81]。
-3.  [cite_start]**验证**：通过 AmoebaNet 和 Transformer 两个截然不同的架构，证明了 GPipe 的灵活性和高效性 [cite: 83]。
+    * 将模型视为层的序列（sequence of layers），将其划分为多个单元（cells）放置在不同加速器上 。
+    * **流水线化（Pipelining）**：将一个 mini-batch 切分为更小的 micro-batches，使不同设备能同时处理不同的 micro-batch，从而并行工作 。
+    * **同步更新**：采用同步梯度下降，保证了无论分区数量如何，梯度的更新逻辑在数学上是一致的 。
+3.  **验证**：通过 AmoebaNet 和 Transformer 两个截然不同的架构，证明了 GPipe 的灵活性和高效性 。
 
 ## 4. Method: 解决方案是什么？请梳理步骤、公式、策略
 
 ### 4.1 核心架构与接口
 GPipe 将任何深层网络定义为 $L$ 层序列。用户只需指定分区数量 $K$ 和微批次数量 $M$。
-* [cite_start]**分区（Partitioning）**：网络被划分为 $K$ 个复合层（cells），第 $k$ 个 cell 放置在第 $k$ 个加速器上 [cite: 151]。
-* [cite_start]**成本估算**：算法尝试最小化各分区计算成本的方差，以平衡负载 [cite: 153]。
+* **分区（Partitioning）**：网络被划分为 $K$ 个复合层（cells），第 $k$ 个 cell 放置在第 $k$ 个加速器上 。
+* **成本估算**：算法尝试最小化各分区计算成本的方差，以平衡负载 。
 
 ### 4.2 流水线并行与微批处理 (Micro-batching)
 为了解决朴素模型并行中的设备空闲问题（Figure 2b），GPipe 将大小为 $N$ 的 mini-batch 切分为 $M$ 个微批次（micro-batches）。
 * **执行流**：微批次依次流经 $K$ 个加速器。
 * **气泡开销（Bubble Overhead）**：流水线的启动和结束阶段会有设备空闲。气泡时间分数为：
     $$O\left(\frac{K-1}{M+K-1}\right)$$
-    [cite_start][cite: 171]
-    [cite_start]当 $M \ge 4K$ 时，气泡开销几乎可以忽略不计 [cite: 173]。
+    
+    当 $M \ge 4K$ 时，气泡开销几乎可以忽略不计 。
 
 ### 4.3 激活重计算 (Re-materialization)
 为了突破显存限制，GPipe 结合了梯度检查点技术（Gradient Checkpointing）。
-* [cite_start]**前向传播**：每个加速器只存储分区边界处的激活值（activation tensors at partition boundaries），丢弃中间层的激活值 [cite: 168]。
-* [cite_start]**反向传播**：在计算梯度时，第 $k$ 个加速器利用边界输入重新计算前向函数 $F_k$ [cite: 169]。
+* **前向传播**：每个加速器只存储分区边界处的激活值（activation tensors at partition boundaries），丢弃中间层的激活值 。
+* **反向传播**：在计算梯度时，第 $k$ 个加速器利用边界输入重新计算前向函数 $F_k$ 。
 * **内存优化**：峰值激活内存需求从 $O(N \times L)$ 降低到：
     $$O\left(N + \frac{L}{K} \times \frac{N}{M}\right)$$
-    [cite_start][cite: 169]
+    
     这里 $L/K$ 是单分区的层数，$N/M$ 是微批次大小。这使得单卡可以承载更大的模型。
 
 ### 4.4 逻辑框图 (Mermaid)
@@ -133,7 +133,7 @@ graph TD
 ### 5.3 效率分析 (Performance Analysis)
 
 * 
-**加速比**：对于 Transformer 模型，当微批次数量  时，吞吐量随加速器数量几乎线性增加（例如 4 倍设备带来 3.5 倍加速）。
+**加速比**：对于 Transformer 模型，当微批次数量 `m` 足够大时，吞吐量随加速器数量几乎线性增加（例如 4 倍设备带来约 3.5 倍加速）。
 
 
 * 
@@ -148,9 +148,9 @@ graph TD
 这份 Numpy 代码完整实现了 **GPipe 的核心逻辑仿真**，主要包含：
 
 1. **`Layer` 与 `Partition` 类**：模拟神经网络层和设备分区。
-2. **`GPipePipeline` 类**：实现了关键的 **F-then-B 调度（Forward-then-Backward）**。这对应论文 Section 2.2 和 Figure 2c，即先把所有  个微批次前向推完，再反向。
+2. **`GPipePipeline` 类**：实现了关键的 **F-then-B 调度（Forward-then-Backward）**。这对应论文 Section 2.2 和 Figure 2c，即先把所有 `m` 个微批次前向推完，再反向。
 3. **`GPipePipelineWithRemat` 类**：实现了**重计算（Re-materialization）**逻辑（论文 Section 2.3），仅存储边界激活值，反向时重算内部激活。
-4. **`accumulate_gradients`**：实现了梯度的累积与平均（对应论文公式：）。
+4. **`accumulate_gradients`**：实现了梯度的累积与平均（对应论文中的 micro-batch 梯度求和后再按 `m` 归一化）。
 
 **数据维度假设**：
 
@@ -915,3 +915,213 @@ print("✓ Torch GPipe logic equivalent run complete.")
 
 
 ```
+
+<!-- AUTO_PDF_IMAGES_START -->
+
+## 论文原图（PDF）
+> 下图自动抽取自原论文 PDF，用于补充概念、结构和实验细节。
+> 来源：`09.pdf`
+
+![GPipe 图 1](/paper-figures/09/img-008.png)
+*图 1：建议结合本节 `流水线并行训练` 一起阅读。*
+
+![GPipe 图 2](/paper-figures/09/img-009.png)
+*图 2：建议结合本节 `流水线并行训练` 一起阅读。*
+
+![GPipe 图 3](/paper-figures/09/img-006.png)
+*图 3：建议结合本节 `流水线并行训练` 一起阅读。*
+
+<!-- AUTO_PDF_IMAGES_END -->
+
+<!-- AUTO_INTERVIEW_QA_START -->
+
+## 面试题与答案
+> 主题：**GPipe**（围绕 `流水线并行训练`）
+
+### 一、选择题（10题）
+
+1. 在 GPipe 中，最关键的建模目标是什么？
+   - A. 流水线并行训练
+   - B. micro-batch
+   - C. pipeline
+   - D. 重计算
+   - **答案：A**
+
+2. 下列哪一项最直接对应 GPipe 的核心机制？
+   - A. micro-batch
+   - B. pipeline
+   - C. 重计算
+   - D. 吞吐
+   - **答案：B**
+
+3. 在复现 GPipe 时，优先要保证哪项一致性？
+   - A. 只看最终分数
+   - B. 只看训练集表现
+   - C. 实现与论文设置对齐
+   - D. 忽略随机种子
+   - **答案：C**
+
+4. 对于 GPipe，哪个指标最能反映方法有效性？
+   - A. 主指标与分组指标
+   - B. 只看单次结果
+   - C. 只看速度
+   - D. 只看参数量
+   - **答案：A**
+
+5. 当 GPipe 模型出现效果退化时，首要检查项是什么？
+   - A. 数据与标签管线
+   - B. 先增大模型十倍
+   - C. 随机改损失函数
+   - D. 删除验证集
+   - **答案：A**
+
+6. GPipe 与传统 baseline 的主要差异通常体现在？
+   - A. 归纳偏置与结构设计
+   - B. 仅参数更多
+   - C. 仅训练更久
+   - D. 仅学习率更小
+   - **答案：A**
+
+7. 若要提升 GPipe 的泛化能力，最稳妥的做法是？
+   - A. 正则化+消融验证
+   - B. 只堆数据不复核
+   - C. 关闭评估脚本
+   - D. 取消对照组
+   - **答案：A**
+
+8. 关于 GPipe 的实验设计，下列说法更合理的是？
+   - A. 固定变量做可复现实验
+   - B. 同时改十个超参
+   - C. 只展示最好一次
+   - D. 省略失败实验
+   - **答案：A**
+
+9. 在工程部署中，GPipe 的常见风险是？
+   - A. 数值稳定与漂移
+   - B. 只关心GPU利用率
+   - C. 日志越少越好
+   - D. 不做回归测试
+   - **答案：A**
+
+10. 回到论文主张，GPipe 最不应该被误解为？
+   - A. 可替代所有任务
+   - B. 有明确适用边界
+   - C. 不需要数据质量
+   - D. 不需要误差分析
+   - **答案：B**
+
+
+### 二、代码题（10题，含参考答案）
+
+1. 实现一个最小可运行的数据预处理函数，输出可用于 GPipe 训练的批次。
+   - 参考答案：
+     ```python
+     import numpy as np
+     
+     def make_batch(x, y, batch_size=32):
+         idx = np.random.choice(len(x), batch_size, replace=False)
+         return x[idx], y[idx]
+     ```
+
+2. 实现 GPipe 的核心前向步骤（简化版），并返回中间张量。
+   - 参考答案：
+     ```python
+     import numpy as np
+     
+     def forward_core(x, w, b):
+         z = x @ w + b
+         h = np.tanh(z)
+         return h, {"z": z, "h": h}
+     ```
+
+3. 写一个训练 step：前向、loss、反向、更新。
+   - 参考答案：
+     ```python
+     def train_step(model, optimizer, criterion, xb, yb):
+         optimizer.zero_grad()
+         pred = model(xb)
+         loss = criterion(pred, yb)
+         loss.backward()
+         optimizer.step()
+         return float(loss.item())
+     ```
+
+4. 实现一个评估函数，返回主指标与一个辅助指标。
+   - 参考答案：
+     ```python
+     import numpy as np
+     
+     def evaluate(y_true, y_pred):
+         acc = (y_true == y_pred).mean()
+         err = 1.0 - acc
+         return {"acc": float(acc), "err": float(err)}
+     ```
+
+5. 实现梯度裁剪与学习率调度的训练循环（简化版）。
+   - 参考答案：
+     ```python
+     import torch
+     
+     def train_loop(model, loader, optimizer, criterion, scheduler=None, clip=1.0):
+         model.train()
+         for xb, yb in loader:
+             optimizer.zero_grad()
+             loss = criterion(model(xb), yb)
+             loss.backward()
+             torch.nn.utils.clip_grad_norm_(model.parameters(), clip)
+             optimizer.step()
+             if scheduler is not None:
+                 scheduler.step()
+     ```
+
+6. 实现 ablation 开关：可切换是否启用 `micro-batch`。
+   - 参考答案：
+     ```python
+     def forward_with_ablation(x, module, use_feature=True):
+         if use_feature:
+             return module(x)
+         return x
+     ```
+
+7. 实现一个鲁棒的数值稳定 softmax / logsumexp 工具函数。
+   - 参考答案：
+     ```python
+     import numpy as np
+     
+     def stable_softmax(x, axis=-1):
+         x = x - np.max(x, axis=axis, keepdims=True)
+         ex = np.exp(x)
+         return ex / np.sum(ex, axis=axis, keepdims=True)
+     ```
+
+8. 写一个小型单元测试，验证 `pipeline` 相关张量形状正确。
+   - 参考答案：
+     ```python
+     def test_shape(out, expected_last_dim):
+         assert out.ndim >= 2
+         assert out.shape[-1] == expected_last_dim
+     ```
+
+9. 实现模型推理包装器，支持 batch 输入并返回结构化结果。
+   - 参考答案：
+     ```python
+     def infer(model, xb):
+         logits = model(xb)
+         pred = logits.argmax(dim=-1)
+         return {"pred": pred, "logits": logits}
+     ```
+
+10. 实现一个实验记录器，保存超参、指标和随机种子。
+   - 参考答案：
+     ```python
+     import json
+     from pathlib import Path
+     
+     def save_run(path, cfg, metrics, seed):
+         payload = {"cfg": cfg, "metrics": metrics, "seed": seed}
+         Path(path).write_text(json.dumps(payload, ensure_ascii=False, indent=2))
+     ```
+
+
+<!-- AUTO_INTERVIEW_QA_END -->
+

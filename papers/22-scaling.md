@@ -7,24 +7,24 @@
 **问题背景**：深度学习在语言建模方面进展迅速，但缺乏对性能如何随规模（Scale）变化的系统性理解。研究者通常依赖经验直觉来调整模型大小、数据量和训练时间。
 
 **核心贡献**：
-1.  [cite_start]**实证幂律**：证明了测试集损失（Test Loss）与参数量 $N$、数据集大小 $D$、计算量 $C$ 之间遵循简单的幂律关系，且该趋势跨越了七个数量级 [cite: 27, 28]。
-2.  [cite_start]**架构无关性**：发现模型形状（如层深、宽度）在一定范围内对性能影响极小，规模（Scale）才是决定因素 [cite: 29, 81]。
-3.  [cite_start]**过拟合预测**：提出了描述过拟合与模型/数据比率关系的公式 [cite: 30]。
-4.  [cite_start]**算力最优分配**：推导出了在固定算力预算下，如何分配计算资源给模型大小和数据量以实现最优性能 [cite: 31, 32]。
+1.  **实证幂律**：证明了测试集损失（Test Loss）与参数量 $N$、数据集大小 $D$、计算量 $C$ 之间遵循简单的幂律关系，且该趋势跨越了七个数量级 。
+2.  **架构无关性**：发现模型形状（如层深、宽度）在一定范围内对性能影响极小，规模（Scale）才是决定因素 。
+3.  **过拟合预测**：提出了描述过拟合与模型/数据比率关系的公式 。
+4.  **算力最优分配**：推导出了在固定算力预算下，如何分配计算资源给模型大小和数据量以实现最优性能 。
 
 ## 3. Introduction: 论文的动机是什么？请仔细梳理整个故事逻辑
 **动机**：
 在 NLP 领域，Transformer 模型（如 GPT 系列）的表现随着资源增加而提升。为了更高效地推进研究，我们需要知道：**下一个 SOTA 模型需要多少算力？应该把算力花在更大的模型上，还是更多的数据上？**
 
 **故事逻辑**：
-1.  [cite_start]**观察现象**：作者训练了一系列不同规模的 Transformer 模型（参数从几百万到十几亿），发现 Loss 的下降曲线非常平滑且可预测 [cite: 45]。
+1.  **观察现象**：作者训练了一系列不同规模的 Transformer 模型（参数从几百万到十几亿），发现 Loss 的下降曲线非常平滑且可预测 。
 2.  **定义变量**：明确了三个关键缩放因子：
-    * [cite_start]$N$：模型参数量（不含 embedding） [cite: 228]。
-    * [cite_start]$D$：数据集 Token 数 [cite: 231]。
-    * [cite_start]$C$：训练计算量（FLOPs），估算为 $C \approx 6NBS$（$B$ 为 batch size，$S$ 为步数） [cite: 229, 262]。
-3.  [cite_start]**发现规律**：当不受其他因素瓶颈限制时，性能与每个单因素呈幂律关系。例如，双倍参数量带来的 Loss 下降是恒定的比例 [cite: 82]。
-4.  [cite_start]**提出推论**：既然规律如此精确，我们可以利用它来指导“算力投资”。论文指出，大模型比小模型有更高的**样本效率（Sample Efficiency）**，即达到相同 Loss 所需的数据更少 [cite: 32, 94]。
-5.  [cite_start]**最终结论**：为了计算效率最大化，应该训练非常大的模型，并在未能收敛前停止训练（Early Stopping），而不是把小模型训练到极致 [cite: 95]。
+    * $N$：模型参数量（不含 embedding） 。
+    * $D$：数据集 Token 数 。
+    * $C$：训练计算量（FLOPs），估算为 $C \approx 6NBS$（$B$ 为 batch size，$S$ 为步数） 。
+3.  **发现规律**：当不受其他因素瓶颈限制时，性能与每个单因素呈幂律关系。例如，双倍参数量带来的 Loss 下降是恒定的比例 。
+4.  **提出推论**：既然规律如此精确，我们可以利用它来指导“算力投资”。论文指出，大模型比小模型有更高的**样本效率（Sample Efficiency）**，即达到相同 Loss 所需的数据更少 。
+5.  **最终结论**：为了计算效率最大化，应该训练非常大的模型，并在未能收敛前停止训练（Early Stopping），而不是把小模型训练到极致 。
 
 ## 4. Method: 解决方案是什么？请梳理步骤、公式、策略
 
@@ -33,16 +33,16 @@
 
 * **参数量缩放定律**（假设数据无限）：
     $$L(N) = \left( \frac{N_c}{N} \right)^{\alpha_N}$$
-    [cite_start]其中 $\alpha_N \sim 0.076$，$N_c \sim 8.8 \times 10^{13}$ [cite: 151]。这意味着增加模型参数能持续降低 Loss。
+    其中 $\alpha_N \sim 0.076$，$N_c \sim 8.8 \times 10^{13}$ 。这意味着增加模型参数能持续降低 Loss。
 
 * **数据量缩放定律**（假设模型无限大）：
     $$L(D) = \left( \frac{D_c}{D} \right)^{\alpha_D}$$
-    [cite_start]其中 $\alpha_D \sim 0.095$ [cite: 152]。
+    其中 $\alpha_D \sim 0.095$ 。
 
 * **联合缩放公式（Unified Scaling Law）**：
     为了描述 $N$ 和 $D$ 同时变化时的 Loss，作者提出了这一关键公式：
     $$L(N, D) = \left[ \left( \frac{N_c}{N} \right)^{\frac{\alpha_N}{\alpha_D}} + \frac{D_c}{D} \right]^{\alpha_D}$$
-    > [cite_start]We find that there is a single equation ... that governs the simultaneous dependence on N and D and governs the degree of overfitting. [cite: 203, 204]
+    > We find that there is a single equation ... that governs the simultaneous dependence on N and D and governs the degree of overfitting. 
     
     该公式不仅拟合了单一变量的变化，还捕捉到了**过拟合**的边界——当 $N$ 过大而 $D$ 不足时，性能提升会停滞。
 
@@ -51,12 +51,12 @@
 $$C_{forward} \approx 2N + 2 n_{layer} n_{ctx} d_{model}$$
 近似处理后，单次训练步（含反向传播）的计算量为：
 $$C \approx 6N$$
-[cite_start]总训练计算量为 $C_{total} = 6NBS$（$S$ 为训练步数，且忽略 Embedding 层参数） [cite: 262]。
+总训练计算量为 $C_{total} = 6NBS$（$S$ 为训练步数，且忽略 Embedding 层参数） 。
 
 ### 4.3 临界 Batch Size
 为了高效并行，必须了解 Batch Size ($B$) 的上限。论文定义了 **Critical Batch Size ($B_{crit}$)**，它随 Loss 的降低而增大：
 $$B_{crit}(L) \approx \frac{B_*}{L^{1/\alpha_B}}$$
-[cite_start]这意味着模型训练得越好（Loss 越低），能有效利用的 Batch Size 就越大 [cite: 200]。
+这意味着模型训练得越好（Loss 越低），能有效利用的 Batch Size 就越大 。
 
 ```mermaid
 graph TD
@@ -526,3 +526,207 @@ print(f"  Resulting Losses: {losses_optimal[:3]} ...")
 
 
 ```
+
+<!-- AUTO_PDF_IMAGES_START -->
+
+## 论文原图（PDF）
+> 下图自动抽取自原论文 PDF，用于补充概念、结构和实验细节。
+> 来源：`22.pdf`
+
+![Scaling Laws 图 1](/paper-figures/22/img-000.png)
+*图 1：建议结合本节 `规模律与算力分配` 一起阅读。*
+
+<!-- AUTO_PDF_IMAGES_END -->
+
+<!-- AUTO_INTERVIEW_QA_START -->
+
+## 面试题与答案
+> 主题：**Scaling Laws**（围绕 `规模律与算力分配`）
+
+### 一、选择题（10题）
+
+1. 在 Scaling Laws 中，最关键的建模目标是什么？
+   - A. 规模律与算力分配
+   - B. 幂律
+   - C. 参数规模
+   - D. 数据规模
+   - **答案：A**
+
+2. 下列哪一项最直接对应 Scaling Laws 的核心机制？
+   - A. 幂律
+   - B. 参数规模
+   - C. 数据规模
+   - D. 计算预算
+   - **答案：B**
+
+3. 在复现 Scaling Laws 时，优先要保证哪项一致性？
+   - A. 只看最终分数
+   - B. 只看训练集表现
+   - C. 实现与论文设置对齐
+   - D. 忽略随机种子
+   - **答案：C**
+
+4. 对于 Scaling Laws，哪个指标最能反映方法有效性？
+   - A. 主指标与分组指标
+   - B. 只看单次结果
+   - C. 只看速度
+   - D. 只看参数量
+   - **答案：A**
+
+5. 当 Scaling Laws 模型出现效果退化时，首要检查项是什么？
+   - A. 数据与标签管线
+   - B. 先增大模型十倍
+   - C. 随机改损失函数
+   - D. 删除验证集
+   - **答案：A**
+
+6. Scaling Laws 与传统 baseline 的主要差异通常体现在？
+   - A. 归纳偏置与结构设计
+   - B. 仅参数更多
+   - C. 仅训练更久
+   - D. 仅学习率更小
+   - **答案：A**
+
+7. 若要提升 Scaling Laws 的泛化能力，最稳妥的做法是？
+   - A. 正则化+消融验证
+   - B. 只堆数据不复核
+   - C. 关闭评估脚本
+   - D. 取消对照组
+   - **答案：A**
+
+8. 关于 Scaling Laws 的实验设计，下列说法更合理的是？
+   - A. 固定变量做可复现实验
+   - B. 同时改十个超参
+   - C. 只展示最好一次
+   - D. 省略失败实验
+   - **答案：A**
+
+9. 在工程部署中，Scaling Laws 的常见风险是？
+   - A. 数值稳定与漂移
+   - B. 只关心GPU利用率
+   - C. 日志越少越好
+   - D. 不做回归测试
+   - **答案：A**
+
+10. 回到论文主张，Scaling Laws 最不应该被误解为？
+   - A. 可替代所有任务
+   - B. 有明确适用边界
+   - C. 不需要数据质量
+   - D. 不需要误差分析
+   - **答案：B**
+
+
+### 二、代码题（10题，含参考答案）
+
+1. 实现一个最小可运行的数据预处理函数，输出可用于 Scaling Laws 训练的批次。
+   - 参考答案：
+     ```python
+     import numpy as np
+     
+     def make_batch(x, y, batch_size=32):
+         idx = np.random.choice(len(x), batch_size, replace=False)
+         return x[idx], y[idx]
+     ```
+
+2. 实现 Scaling Laws 的核心前向步骤（简化版），并返回中间张量。
+   - 参考答案：
+     ```python
+     import numpy as np
+     
+     def forward_core(x, w, b):
+         z = x @ w + b
+         h = np.tanh(z)
+         return h, {"z": z, "h": h}
+     ```
+
+3. 写一个训练 step：前向、loss、反向、更新。
+   - 参考答案：
+     ```python
+     def train_step(model, optimizer, criterion, xb, yb):
+         optimizer.zero_grad()
+         pred = model(xb)
+         loss = criterion(pred, yb)
+         loss.backward()
+         optimizer.step()
+         return float(loss.item())
+     ```
+
+4. 实现一个评估函数，返回主指标与一个辅助指标。
+   - 参考答案：
+     ```python
+     import numpy as np
+     
+     def evaluate(y_true, y_pred):
+         acc = (y_true == y_pred).mean()
+         err = 1.0 - acc
+         return {"acc": float(acc), "err": float(err)}
+     ```
+
+5. 实现梯度裁剪与学习率调度的训练循环（简化版）。
+   - 参考答案：
+     ```python
+     import torch
+     
+     def train_loop(model, loader, optimizer, criterion, scheduler=None, clip=1.0):
+         model.train()
+         for xb, yb in loader:
+             optimizer.zero_grad()
+             loss = criterion(model(xb), yb)
+             loss.backward()
+             torch.nn.utils.clip_grad_norm_(model.parameters(), clip)
+             optimizer.step()
+             if scheduler is not None:
+                 scheduler.step()
+     ```
+
+6. 实现 ablation 开关：可切换是否启用 `幂律`。
+   - 参考答案：
+     ```python
+     def forward_with_ablation(x, module, use_feature=True):
+         if use_feature:
+             return module(x)
+         return x
+     ```
+
+7. 实现一个鲁棒的数值稳定 softmax / logsumexp 工具函数。
+   - 参考答案：
+     ```python
+     import numpy as np
+     
+     def stable_softmax(x, axis=-1):
+         x = x - np.max(x, axis=axis, keepdims=True)
+         ex = np.exp(x)
+         return ex / np.sum(ex, axis=axis, keepdims=True)
+     ```
+
+8. 写一个小型单元测试，验证 `参数规模` 相关张量形状正确。
+   - 参考答案：
+     ```python
+     def test_shape(out, expected_last_dim):
+         assert out.ndim >= 2
+         assert out.shape[-1] == expected_last_dim
+     ```
+
+9. 实现模型推理包装器，支持 batch 输入并返回结构化结果。
+   - 参考答案：
+     ```python
+     def infer(model, xb):
+         logits = model(xb)
+         pred = logits.argmax(dim=-1)
+         return {"pred": pred, "logits": logits}
+     ```
+
+10. 实现一个实验记录器，保存超参、指标和随机种子。
+   - 参考答案：
+     ```python
+     import json
+     from pathlib import Path
+     
+     def save_run(path, cfg, metrics, seed):
+         payload = {"cfg": cfg, "metrics": metrics, "seed": seed}
+         Path(path).write_text(json.dumps(payload, ensure_ascii=False, indent=2))
+     ```
+
+
+<!-- AUTO_INTERVIEW_QA_END -->
+
