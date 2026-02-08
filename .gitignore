@@ -3,3 +3,9 @@ dist
 .temp
 .cache
 .DS_Store
+# large local folders not meant for publishing
+../papers
+../sutskever-30-implementations
+public/agents-assets
+public/paper-figures
+scripts/__pycache__/
