@@ -483,6 +483,36 @@ def method_name_from_title(title: str) -> str:
     return trim_token(" ".join(words[:4]))
 
 
+GENERIC_METHOD_NAMES = {
+    "understanding",
+    "demystifying",
+    "beyond",
+    "from",
+    "towards",
+    "acting",
+    "accelerating",
+    "agentic",
+    "online",
+    "reinforcement",
+}
+
+
+def refine_method_name(base_name: str, profile: Dict[str, List[str]], title: str) -> str:
+    name = normalize_token(base_name) or base_name
+    low = name.lower()
+    if low not in GENERIC_METHOD_NAMES:
+        return name
+    for tok in profile.get("key_terms", []):
+        low_t = tok.lower()
+        if low_t in TOKEN_STOPWORDS or low_t in GENERIC_METHOD_NAMES:
+            continue
+        if any(ch.isdigit() for ch in tok) or "-" in tok or "@" in tok or tok.isupper():
+            return tok
+    if "survey" in title.lower():
+        return "Survey Framework"
+    return name
+
+
 def infer_focus(title: str, abstract: str, method: str) -> str:
     low = f"{title} {abstract} {method}".lower()
     if any(k in low for k in ("memory", "episodic", "retrieval")):
@@ -683,6 +713,286 @@ def build_result_points(evidence: Dict[str, object]) -> List[str]:
     return points
 
 
+TOKEN_STOPWORDS = {
+    "the",
+    "and",
+    "for",
+    "with",
+    "this",
+    "that",
+    "from",
+    "into",
+    "their",
+    "our",
+    "paper",
+    "model",
+    "models",
+    "method",
+    "methods",
+    "framework",
+    "figure",
+    "table",
+    "results",
+    "result",
+    "experiments",
+    "experiment",
+    "performance",
+    "approach",
+    "approaches",
+    "learning",
+    "reinforcement",
+    "large",
+    "language",
+    "agent",
+    "agents",
+    "online",
+    "training",
+    "towards",
+    "based",
+    "using",
+    "over",
+    "under",
+    "data",
+}
+
+
+BENCHMARK_HINTS = (
+    "bench",
+    "benchmark",
+    "gaia",
+    "alfworld",
+    "webshop",
+    "libero",
+    "maniskill",
+    "mmlu",
+    "math",
+    "gsm",
+    "aime",
+    "humaneval",
+    "swe",
+    "arc",
+    "musique",
+    "hotpot",
+    "truthful",
+    "bbh",
+    "eval",
+    "apworld",
+)
+
+
+GENERIC_BENCH_TERMS = {"bench", "benchmark", "benchmarks", "research", "evaluation", "eval", "architecture", "taxonomy"}
+
+BENCHMARK_EXACT = {
+    "gaia",
+    "alfworld",
+    "webshop",
+    "libero",
+    "maniskill",
+    "mmlu",
+    "gsm8k",
+    "gsm",
+    "aime",
+    "humaneval",
+    "swebench",
+    "swe-bench",
+    "arc",
+    "musique",
+    "hotpotqa",
+    "apworld",
+    "bbh",
+    "truthfulqa",
+}
+
+
+def normalize_token(token: str) -> str:
+    t = token.strip().strip("`'\".,;:()[]{}")
+    t = re.sub(r"^[^A-Za-z0-9]+|[^A-Za-z0-9]+$", "", t)
+    return t
+
+
+def token_candidates(text: str) -> List[str]:
+    pats = [
+        r"\b[A-Za-z][A-Za-z0-9@+\-_/]{2,}\b",
+    ]
+    out: List[str] = []
+    for pat in pats:
+        out.extend(re.findall(pat, text))
+    return out
+
+
+def is_benchmark_token(low: str) -> bool:
+    if low in GENERIC_BENCH_TERMS:
+        return False
+    if low in BENCHMARK_EXACT:
+        return True
+    if any(low.startswith(x + "-") for x in BENCHMARK_EXACT):
+        return True
+    if "bench" in low or "eval" in low:
+        return True
+    return False
+
+
+def collect_profile_terms(evidence: Dict[str, object], method_name: str) -> Dict[str, List[str]]:
+    texts: List[str] = []
+    texts.append(str(evidence.get("title", "")))
+    texts.append(str(evidence.get("abstract", "")))
+    texts.append(str(evidence.get("method_snippet", {}).get("text", "")))
+    texts.append(str(evidence.get("experiment_snippet", {}).get("text", "")))
+    for row in evidence.get("selected_tables", []):
+        texts.append(str(row.get("caption", "")))
+    for row in evidence.get("selected_figures", []):
+        texts.append(str(row.get("caption", "")))
+    blob = " ".join(texts)
+
+    method_low = method_name.lower()
+    seen: Dict[str, None] = {}
+    benchmark_terms: List[str] = []
+    key_terms: List[str] = []
+    for raw in token_candidates(blob):
+        tok = normalize_token(raw)
+        if not tok:
+            continue
+        low = tok.lower()
+        if low in TOKEN_STOPWORDS:
+            continue
+        if low == method_low:
+            continue
+        if len(tok) < 3 or len(tok) > 24:
+            continue
+        if re.search(r"(.)\1\1", tok):
+            continue
+        if tok in seen:
+            continue
+        alpha = sum(ch.isalpha() for ch in tok)
+        upper = sum(ch.isupper() for ch in tok if ch.isalpha())
+        if alpha and upper / alpha > 0.95 and len(tok) > 10:
+            continue
+        if not any(c.isupper() for c in tok) and not any(c.isdigit() for c in tok) and "-" not in tok and "@" not in tok:
+            continue
+        seen[tok] = None
+
+        if is_benchmark_token(low):
+            benchmark_terms.append(tok)
+        else:
+            key_terms.append(tok)
+
+    if not benchmark_terms:
+        exp_txt = str(evidence.get("experiment_snippet", {}).get("text", ""))
+        for raw in token_candidates(exp_txt):
+            tok = normalize_token(raw)
+            low = tok.lower()
+            if tok and is_benchmark_token(low) and tok not in benchmark_terms:
+                benchmark_terms.append(tok)
+            if len(benchmark_terms) >= 3:
+                break
+
+    mechanisms: List[str] = []
+    mech_map = [
+        ("retrieval", "检索"),
+        ("memory", "记忆"),
+        ("tool", "工具调用"),
+        ("planner", "规划"),
+        ("search", "搜索"),
+        ("reward", "奖励建模"),
+        ("policy", "策略更新"),
+        ("reflection", "反思"),
+        ("self-", "自进化"),
+        ("sft", "监督微调"),
+        ("dpo", "偏好优化"),
+        ("ppo", "策略优化"),
+        ("grpo", "策略优化"),
+    ]
+    low_blob = blob.lower()
+    for key, zh in mech_map:
+        if key in low_blob and zh not in mechanisms:
+            mechanisms.append(zh)
+
+    return {
+        "benchmarks": benchmark_terms[:3],
+        "key_terms": key_terms[:4],
+        "mechanisms": mechanisms[:4],
+    }
+
+
+def fmt_terms(terms: List[str], n: int = 2) -> str:
+    if not terms:
+        return ""
+    picked = terms[:n]
+    return "、".join(f"`{t}`" for t in picked)
+
+
+def personalized_lines(
+    focus: str,
+    method_name: str,
+    profile: Dict[str, List[str]],
+    method_page: int,
+    exp_page: int,
+    concl_page: int,
+) -> Dict[str, str]:
+    benches = profile.get("benchmarks", [])
+    mechs = profile.get("mechanisms", [])
+    keys = profile.get("key_terms", [])
+    bench_desc = fmt_terms(benches, 2)
+    mech_desc = "、".join(mechs[:3]) if mechs else ""
+    key_desc = fmt_terms(keys, 2)
+
+    if bench_desc:
+        pain = f"核心痛点：在 {bench_desc} 等任务里，{focus} 既要提升成功率，也要控制交互成本和稳定性。"
+    elif mech_desc:
+        pain = f"核心痛点：{focus} 需要同时协调 {mech_desc}，否则容易出现性能波动与复现不稳定。"
+    else:
+        pain = f"核心痛点：`{method_name}` 面向的 {focus} 场景常受反馈噪声、分布漂移和工程复杂度的共同影响。"
+
+    if mech_desc:
+        reader = f"读者应关注：`{method_name}` 如何把 {mech_desc} 组织成闭环，并将反馈转化为下一轮改进。"
+    elif key_desc:
+        reader = f"读者应关注：`{method_name}` 是否依赖 {key_desc} 形成有效的决策增益路径。"
+    else:
+        reader = f"读者应关注：`{method_name}` 是否真正改变了决策闭环，而不只是调参或模型放大。"
+
+    if bench_desc:
+        eng_tip = f"工程落地要点：先在 {bench_desc} 复现最小闭环，再按论文顺序替换关键模块并做回归评测。"
+    elif mech_desc:
+        eng_tip = f"工程落地要点：先实现“输入-决策-反馈-更新”主链路，再逐步插入 {mech_desc} 相关模块。"
+    else:
+        eng_tip = f"工程落地要点：先用 `{method_name}` 打通最小闭环（输入 -> 决策 -> 反馈 -> 更新），再逐步替换论文组件。"
+
+    if bench_desc:
+        strongest = f"最强贡献：将 `{method_name}` 落成可执行闭环，并在 {bench_desc} 上给出可追溯证据（PDF p.{method_page}, p.{exp_page}）。"
+        fragile = f"脆弱假设：默认 {bench_desc} 与真实部署场景分布足够接近；一旦偏移，收益可能回落。"
+    else:
+        strongest = f"最强贡献：将 `{method_name}` 的关键环节显式化，并提供可追溯证据（PDF p.{method_page}, p.{exp_page}）。"
+        fragile = f"脆弱假设：`{method_name}` 默认评测口径稳定、奖励/反馈可信且任务分布不过度漂移。"
+
+    if mech_desc:
+        replaceable = f"最可能被替代的部分：针对 {mech_desc} 的固定启发式，后续可能被学习式调度替换（参考 PDF p.{concl_page}）。"
+    else:
+        replaceable = f"最可能被替代的部分：固定启发式组件，后续可能被更强学习策略替代（参考 PDF p.{concl_page}）。"
+
+    research_1 = f"研究线：在 {focus} 上做消融对照，分离结构增益与训练信号增益。"
+    research_2 = f"研究线：把 `{method_name}` 迁移到新任务域，验证分布外鲁棒性和可扩展性。"
+    engineering_1 = f"工程线：按 `{method_name}` 的模块边界拆分代码，先打通端到端路径再逐模块替换。"
+    engineering_2 = (
+        f"工程线：围绕 {bench_desc} 建立统一评测脚本与错误分类，避免“看起来提升”但口径不一致。"
+        if bench_desc
+        else "工程线：建立统一评测脚本与错误分类，避免“看起来提升”但口径不一致。"
+    )
+
+    return {
+        "pain": pain,
+        "reader": reader,
+        "eng_tip": eng_tip,
+        "strongest": strongest,
+        "fragile": fragile,
+        "replaceable": replaceable,
+        "research_1": research_1,
+        "research_2": research_2,
+        "engineering_1": engineering_1,
+        "engineering_2": engineering_2,
+        "bench_desc": bench_desc,
+    }
+
+
 REPO_CACHE: Dict[str, Dict[str, object]] = {}
 
 
@@ -836,6 +1146,10 @@ def compose_markdown(paper: PaperMeta, evidence: Dict[str, object], probe_github
     title_text = str(evidence.get("title", paper.title))
     method_name = method_name_from_title(title_text)
     focus = infer_focus(title_text, abstract, method)
+    profile = collect_profile_terms(evidence, method_name)
+    method_name = refine_method_name(method_name, profile, title_text)
+    lines_profile = personalized_lines(focus, method_name, profile, method_page, exp_page, concl_page)
+    bench_desc = str(lines_profile.get("bench_desc", ""))
     if contrib:
         contrib_low = contrib.lower()
         if contrib_low.startswith(title_text.lower()[:20].lower()) or contrib.count(",") >= 6:
@@ -855,7 +1169,12 @@ def compose_markdown(paper: PaperMeta, evidence: Dict[str, object], probe_github
     if method:
         tldr.append(f"- 方法线索（PDF p.{method_page}）：{method}")
     tldr.append(f"- 实验线索（PDF p.{exp_page}）：见实验章节与图表标题。")
-    tldr.append(f"- 中文解读：论文围绕“{focus}”提出 `{method_name}`，目标是在真实任务中提高成功率并控制训练/推理代价。")
+    if bench_desc:
+        tldr.append(
+            f"- 中文解读：论文围绕“{focus}”提出 `{method_name}`，并在 {bench_desc} 等评测场景验证其有效性。"
+        )
+    else:
+        tldr.append(f"- 中文解读：论文围绕“{focus}”提出 `{method_name}`，目标是在真实任务中提高成功率并控制训练/推理代价。")
     tldr.append("- 复现边界：仅复述可定位到页码或仓库路径的信息，未确认内容一律标注。")
     tldr.append("- 工程提示：在离线环境下仅做证据驱动解读，不扩写未确认细节。")
 
@@ -871,8 +1190,8 @@ def compose_markdown(paper: PaperMeta, evidence: Dict[str, object], probe_github
     lines.append("## 问题定义与动机")
     lines.append(f"- 背景（PDF p.{intro_page}）：{intro if intro else '引言强调现有方法在泛化、稳定性或工程可复现性上存在瓶颈。'}")
     lines.append(f"- 研究目标（PDF p.{abs_page}）：{abstract if abstract else f'论文目标是在{focus}方向提升 Agent 的有效性与稳定性。'}")
-    lines.append(f"- 核心痛点：{focus}在真实任务中常出现“效果波动、反馈噪声、复现成本高”的三重约束。")
-    lines.append(f"- 读者应关注：`{method_name}` 是否真正改变了决策闭环，而不仅是提示词或模型规模变化。")
+    lines.append(f"- {lines_profile['pain']}")
+    lines.append(f"- {lines_profile['reader']}")
     lines.append("")
     lines.append("## 方法总览图")
     lines.append("```mermaid")
@@ -901,7 +1220,7 @@ def compose_markdown(paper: PaperMeta, evidence: Dict[str, object], probe_github
     lines.append("```")
     lines.append("- 设计选择与消融动机：优先看“关键模块开关 + 反馈信号变化”是否同时报告。")
     lines.append("- 读者常见误区：把结构性改进误读成纯粹的“模型更大/训练更久”。")
-    lines.append("- 工程落地要点：先实现最小闭环（输入 -> 决策 -> 反馈 -> 更新），再逐步替换为论文组件。")
+    lines.append(f"- {lines_profile['eng_tip']}")
     lines.append("")
     lines.append("## 实验与结果")
     lines.extend(result_points)
@@ -916,15 +1235,15 @@ def compose_markdown(paper: PaperMeta, evidence: Dict[str, object], probe_github
     lines.extend(github_lines)
     lines.append("")
     lines.append("## 我作为研究者的评价")
-    lines.append(f"- 最强贡献：把 {focus} 的关键环节显式化，并提供可追溯证据（PDF p.{method_page}, p.{exp_page}）。")
-    lines.append("- 脆弱假设：评测口径稳定、奖励/反馈可信、任务分布不过度漂移。")
-    lines.append(f"- 最可能被替代的部分：固定启发式策略，后续可能被更强学习式调度替代（参考 PDF p.{concl_page}）。")
+    lines.append(f"- {lines_profile['strongest']}")
+    lines.append(f"- {lines_profile['fragile']}")
+    lines.append(f"- {lines_profile['replaceable']}")
     lines.append("")
     lines.append("## 你可以怎么用它")
-    lines.append("- 研究线：复现实验对照，定位贡献来自“结构设计”还是“训练信号”。")
-    lines.append("- 研究线：迁移到不同任务域，检查方法在分布外场景是否仍稳健。")
-    lines.append("- 工程线：先实现最小可运行闭环，再按论文顺序替换核心组件。")
-    lines.append("- 工程线：建立统一评测脚本与错误分类，避免“看起来提升”但口径不一致。")
+    lines.append(f"- {lines_profile['research_1']}")
+    lines.append(f"- {lines_profile['research_2']}")
+    lines.append(f"- {lines_profile['engineering_1']}")
+    lines.append(f"- {lines_profile['engineering_2']}")
     lines.append("")
     lines.append("## 插图")
     lines.append(image_block if image_block else "论文图像提取失败，建议手动补充资产。")
@@ -1187,9 +1506,12 @@ def main() -> None:
             continue
         evidence = build_evidence(paper)
         md = compose_markdown(paper, evidence, probe_github=args.probe_github)
-        method_name = method_name_from_title(str(evidence.get("title", paper.title)))
+        title_text = str(evidence.get("title", paper.title))
+        method_name = method_name_from_title(title_text)
+        profile = collect_profile_terms(evidence, method_name)
+        method_name = refine_method_name(method_name, profile, title_text)
         focus = infer_focus(
-            str(evidence.get("title", paper.title)),
+            title_text,
             str(evidence.get("abstract", "")),
             str(evidence.get("method_snippet", {}).get("text", "")),
         )
